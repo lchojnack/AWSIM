@@ -24,6 +24,9 @@ namespace AWSIM.TrafficSimulationECS
 
     public struct NPCVehicleSpawnerComponent : IComponentData
     {
+        public int spawnedVehicle;
+        public float NextSpawnTime;
+        public float SpawnRate;
         public int seed;
         public int maxVehicleCount;
     }

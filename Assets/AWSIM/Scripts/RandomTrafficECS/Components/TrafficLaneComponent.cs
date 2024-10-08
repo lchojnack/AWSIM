@@ -17,12 +17,18 @@ namespace AWSIM.TrafficSimulationECS
         public TrafficLaneComponent Value;
     }
 
+    public enum TurnDirectionType
+    {
+        STRAIGHT = 0,
+        LEFT = 1,
+        RIGHT = 2,
+        NULL = 3
+    }
+
     public struct TrafficLaneComponent : IComponentData
     {
         public int trafficLaneId;
-        public int turnDirection;
-        // public float3 startPoint;
-        // public float3 endPoint;
+        public TurnDirectionType turnDirection;
         public int stopLine;
         public float speedLimit;
         public bool intersectionLane;

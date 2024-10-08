@@ -13,6 +13,9 @@ namespace AWSIM.TrafficSimulationECS
     [UpdateInGroup(typeof(InitializationSystemGroup))]
     public partial struct NPCVehicleSystem : ISystem
     {
+        private const float MinFrontVehicleDistance = 4f;
+        private const float MinStopDistance = 1.5f;
+
         [BurstCompile]
         public void OnCreate(ref SystemState state)
         {
@@ -31,7 +34,7 @@ namespace AWSIM.TrafficSimulationECS
                 if(entityManager.HasComponent<NPCVehicleComponent>(entity))
                 {
                     NPCVehicleComponent npc = entityManager.GetComponentData<NPCVehicleComponent>(entity);
-                    LocalTransform localTransform = entityManager.GetComponentData<LocalTransform>(entity);
+                    LocalTransform localTransform = state.EntityManager.GetComponentData<LocalTransform>(entity);
 
                     NPCVehicleCognitionStep(ref npc, ref state);
                     NPCVehicleDecisionStep(ref npc, ref state);
@@ -52,7 +55,7 @@ namespace AWSIM.TrafficSimulationECS
         private void NextWaypointCheckJob(ref NPCVehicleComponent npc, ref SystemState state)
         {
             var distanceToCurrentWaypoint = GeometryUtility.Distance2D(npc.targetPoint, npc.position);
-            var isCloseToTarget = distanceToCurrentWaypoint <= 1f;
+            var isCloseToTarget = distanceToCurrentWaypoint <= 2f;
 
             if(!isCloseToTarget)
             {
@@ -62,6 +65,7 @@ namespace AWSIM.TrafficSimulationECS
             var waypoints = getWaypoints(ref state, npc.currentTrafficLane.trafficLaneId);
             if (npc.waypointIndex >= (waypoints.Length-1))
             {
+                // equivalent to extend following lanes
                 var nextTrafficLane = getNextTrafficLane(ref state, npc.currentTrafficLane.trafficLaneId);
                 if(nextTrafficLane.trafficLaneId == -1)
                 {
@@ -70,7 +74,7 @@ namespace AWSIM.TrafficSimulationECS
                 else
                 {
                     npc.currentTrafficLane = nextTrafficLane;
-                    npc.waypointIndex = 0;
+                    npc.waypointIndex = 1;
                 }
             }       
             else
@@ -80,16 +84,104 @@ namespace AWSIM.TrafficSimulationECS
             }
         }
 
-        private void NPCVehicleDecisionStep(ref NPCVehicleComponent npc, ref SystemState state )
+        private void NPCVehicleDecisionStep(ref NPCVehicleComponent npc, ref SystemState state)
+        {
+            UpdateTargetPoint(ref npc, ref state);
+            UpdateSpeedMode(ref npc, ref state);
+        }
+
+        private static void UpdateTargetPoint(ref NPCVehicleComponent npc, ref SystemState state)
+        {
+            if (npc.shouldDespawn || npc.currentTrafficLane.trafficLaneId == -1)
+            {
+                return;
+            }
+
+            // var waypoints = getWaypoints(ref state, npc.currentTrafficLane.trafficLaneId);
+            // npc.targetPoint = waypoints[npc.waypointIndex].Value;
+        }
+
+        private void UpdateSpeedMode(ref NPCVehicleComponent npc, ref SystemState state)
         {
             if (npc.shouldDespawn)
             {
                 return;
             }
-            // UpdateSpeedMode
-            npc.speedMode = NPCVehicleSpeedMode.NORMAL;
 
+            var absoluteStopDistance = CalculateStoppableDistance(npc.speed, npc.config.absoluteDeceleration) + MinStopDistance;
+            var suddenStopDistance = CalculateStoppableDistance(npc.speed, npc.config.suddenDeceleration) + 2 * MinStopDistance;
+            var stopDistance = CalculateStoppableDistance(npc.speed, npc.config.deceleration) + 3 * MinStopDistance;
+            var slowDownDistance = stopDistance + 4 * MinStopDistance;
+
+            var distanceToStopPointByFrontVehicle = onlyGreaterThan(npc.distanceToFrontVehicle - MinFrontVehicleDistance, -MinFrontVehicleDistance);
+            var distanceToStopPointByTrafficLight = CalculateTrafficLightDistance(ref npc, ref state, suddenStopDistance);
+            var distanceToStopPointByRightOfWay = CalculateYieldingDistance(ref npc, ref state);
+            var distanceToStopPoint = Mathf.Min(distanceToStopPointByFrontVehicle, distanceToStopPointByTrafficLight);
+            distanceToStopPoint = Mathf.Min(distanceToStopPoint, distanceToStopPointByRightOfWay);
+
+            npc.isStoppedByFrontVehicle = false;
+            if (distanceToStopPointByFrontVehicle <= stopDistance)
+            {
+                npc.isStoppedByFrontVehicle = true;
+            }
+
+            if (distanceToStopPoint <= absoluteStopDistance)
+                npc.speedMode = NPCVehicleSpeedMode.ABSOLUTE_STOP;
+            else if (distanceToStopPoint <= suddenStopDistance)
+                npc.speedMode = NPCVehicleSpeedMode.SUDDEN_STOP;
+            else if (distanceToStopPoint <= stopDistance)
+                npc.speedMode = NPCVehicleSpeedMode.STOP;
+            else if (distanceToStopPoint <= slowDownDistance || npc.isTurning)
+                npc.speedMode = NPCVehicleSpeedMode.SLOW;
+            else
+                npc.speedMode = NPCVehicleSpeedMode.NORMAL;
         }
+
+        private float CalculateYieldingDistance(ref NPCVehicleComponent npc, ref SystemState state)
+        {
+            // TODO no yielding information so far
+            var distanceToStopPointByRightOfWay = float.MaxValue;
+            if (npc.yieldPhase != NPCVehicleYieldPhase.NONE && npc.yieldPhase != NPCVehicleYieldPhase.ENTERING_INTERSECTION && npc.yieldPhase != NPCVehicleYieldPhase.AT_INTERSECTION)
+            {
+                distanceToStopPointByRightOfWay = SignedDistanceToPointOnLane(ref npc, npc.yieldPoint);
+            }
+            return onlyGreaterThan(distanceToStopPointByRightOfWay, 0);
+        }
+
+        private float CalculateTrafficLightDistance(ref NPCVehicleComponent npc, ref SystemState state, float suddenStopDistance)
+        {
+            // TODO no traffic light information so far
+            var distanceToStopPointByTrafficLight = float.MaxValue;
+            return onlyGreaterThan(distanceToStopPointByTrafficLight, 0);
+        }
+
+        private float CalculateStoppableDistance(float speed, float deceleration)
+        {
+            return onlyGreaterThan(speed * speed / 2f / deceleration, 0);
+        }
+
+        private float onlyGreaterThan(float value, float min_value = 0)
+        {
+            return value >= min_value ? value : float.MaxValue;
+        }
+
+        public float SignedDistanceToPointOnLane(ref NPCVehicleComponent npc, float3 point)
+        {
+            var position = FrontCenterPosition(ref npc);
+            position.y = 0f;
+            point.y = 0f;
+
+            var forward = Forward(ref npc);
+            var forwardVec = new Vector3{x = forward.x , y = forward.y, z = forward.z};
+            var pointPos = point - position;
+            var pointPosVec = new Vector3{x = pointPos.x , y = pointPos.y, z = pointPos.z};
+
+            var hasPassedThePoint = Vector3.Dot(forwardVec, pointPosVec) < 0f;
+
+            var distance = Vector3.Distance(position, point);
+            return hasPassedThePoint ? -distance : distance;
+        }
+
 
         private void NPCVehicleControlStep(ref LocalTransform localTransform, ref NPCVehicleComponent npc, ref SystemState state)
         {
@@ -201,7 +293,42 @@ namespace AWSIM.TrafficSimulationECS
 
             localTransform.Position = npc.position;
             localTransform.Rotation = Quaternion.AngleAxis(npc.yaw, Vector3.up);
+            // vehicle.SetRotation(Quaternion.AngleAxis(state.Yaw, Vector3.up));
         }
+
+        public void SetPosition(ref NPCVehicleComponent npc ,float3 position)
+        {
+            var maxVerticalSpeed = 40f;
+        //     rigidbody.MovePosition(new Vector3(position.x, rigidbody.position.y, position.z));
+            // var velocityY = Mathf.Min(rigidbody.velocity.y, maxVerticalSpeed);
+            // npc.rigidbody.velocity = new Vector3(0, velocityY, 0);
+        }
+
+        // public void SetRotation(Quaternion rotation)
+        // {
+        //     var inputAngles = rotation.eulerAngles;
+        //     var rigidbodyAngles = rigidbody.rotation.eulerAngles;
+        //     var pitch = ClampDegree360(rigidbodyAngles.x, maxSlope);
+        //     var roll = ClampDegree360(rigidbodyAngles.z, maxSlope);
+        //     rigidbody.MoveRotation(Quaternion.Euler(pitch, inputAngles.y, roll));
+        //     var angularVelocity = rigidbody.angularVelocity;
+        //     rigidbody.angularVelocity = new Vector3(angularVelocity.x, 0f, angularVelocity.z);
+
+        //     static float ClampDegree360(float value, float maxAbsValue)
+        //     {
+        //         if (value < 360f - maxAbsValue && value > 180f)
+        //         {
+        //             return 360f - maxAbsValue;
+        //         }
+
+        //         if (value > maxAbsValue && value <= 180f)
+        //         {
+        //             return maxAbsValue;
+        //         }
+
+        //         return value;
+        //     }
+        // }
 
         private TrafficLaneComponent getNextTrafficLane(ref SystemState state, int trafficLaneId)
         {
@@ -219,7 +346,8 @@ namespace AWSIM.TrafficSimulationECS
                             return new TrafficLaneComponent{trafficLaneId = -1};
                         }
                         // TODO make it random
-                        var nextLane = nextLanes[0].Value;
+                        var nextLane = nextLanes[UnityEngine.Random.Range(0, nextLanes.Length)].Value; 
+                        // var nextLane = nextLanes[0].Value; 
                         return nextLane;
                     }
                 }

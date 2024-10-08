@@ -66,10 +66,10 @@ namespace AWSIM.TrafficSimulationECS
         public override void Bake(TrafficManagerECS authoring)
         {
 
-            // var spawnLane = toTrafficLaneComponent(authoring.randomTrafficSims[0].spawnableLanes[0]);
             var spawner = CreateAdditionalEntity(TransformUsageFlags.Dynamic, entityName: "NpcSpawner");
             AddComponent(spawner, new NPCVehicleSpawnerComponent
             {
+                SpawnRate = 20,
                 seed = authoring.seed,
                 maxVehicleCount = authoring.maxVehicleCount,
             });
@@ -118,8 +118,6 @@ namespace AWSIM.TrafficSimulationECS
                     AppendToBuffer(tlEntity, new NextLanes { Value = toTrafficLaneComponent(nextLane)});
                 }
             }
-
-
         }
 
         private TrafficLaneComponent toTrafficLaneComponent(AWSIM.TrafficSimulation.TrafficLane trafficLane)
@@ -128,14 +126,29 @@ namespace AWSIM.TrafficSimulationECS
             {
                 return new TrafficLaneComponent {
                     trafficLaneId = toID(trafficLane),
-                    turnDirection = (int)trafficLane.TurnDirection,
-                    // startPoint = trafficLane.Waypoints[0],
-                    // endPoint = trafficLane.Waypoints[trafficLane.Waypoints.Length-1],
+                    turnDirection = toTurnDirectionType(trafficLane.TurnDirection),
                     speedLimit = trafficLane.SpeedLimit,
                     intersectionLane = trafficLane.intersectionLane
                 };
             }
             return new TrafficLaneComponent{trafficLaneId = -1};
+        }
+
+        private TurnDirectionType toTurnDirectionType(AWSIM.TrafficSimulation.TrafficLane.TurnDirectionType turnDirection)
+        {
+            switch(turnDirection)
+            {
+                case(AWSIM.TrafficSimulation.TrafficLane.TurnDirectionType.STRAIGHT):
+                    return TurnDirectionType.STRAIGHT;
+                case(AWSIM.TrafficSimulation.TrafficLane.TurnDirectionType.LEFT):
+                    return TurnDirectionType.LEFT;
+                case(AWSIM.TrafficSimulation.TrafficLane.TurnDirectionType.RIGHT):
+                    return TurnDirectionType.RIGHT;
+                case(AWSIM.TrafficSimulation.TrafficLane.TurnDirectionType.NULL):
+                    return TurnDirectionType.NULL;
+            }
+
+            return TurnDirectionType.NULL;
         }
 
         private int toID(AWSIM.TrafficSimulation.TrafficLane tl)
