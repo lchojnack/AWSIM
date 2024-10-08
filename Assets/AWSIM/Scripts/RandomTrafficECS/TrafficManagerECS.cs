@@ -10,6 +10,8 @@ namespace AWSIM.TrafficSimulationECS
 
     public class TrafficManagerECS : MonoBehaviour
     {
+        public bool debugMode = false;
+
         [SerializeField, Tooltip("Seed value for random generator.")]
         public int seed;
         [Header("NPC Vehicle Settings")]
@@ -23,7 +25,7 @@ namespace AWSIM.TrafficSimulationECS
 
         [SerializeField, Tooltip("A maximum number of vehicles that can simultaneously live in the scene. Lowering this value results in less dense traffic but improves the simulator's performance.")]
         public int maxVehicleCount = 100;
-        public int targetVehicleCount = 10;
+        // public int targetVehicleCount = 10;
 
         // [SerializeField, Tooltip("Ego vehicle handler. If not set, the manager creates a dummy ego. This reference is also set automatically when the Ego spawns via the traffic simulator.")]
         // private GameObject _egoVehicle;
@@ -47,16 +49,17 @@ namespace AWSIM.TrafficSimulationECS
         // }
 
         [Header("Debug")]
-        [SerializeField] protected bool showGizmos = false;
-        [SerializeField] protected bool showYieldingPhase = false;
-        [SerializeField] protected bool showObstacleChecking = false;
-        [SerializeField] protected bool showSpawnPoints = false;
+        // [SerializeField] protected bool showGizmos = false;
+        // [SerializeField] protected bool showYieldingPhase = false;
+        // [SerializeField] protected bool showObstacleChecking = false;
+        // [SerializeField] protected bool showSpawnPoints = false;
         public RandomTrafficSimulatorConfiguration[] randomTrafficSims;
         // public RouteTrafficSimulatorConfiguration[] routeTrafficSims;
         // public NPCVehicleSimulator NpcVehicleSimulator;
         // private List<ITrafficSimulator> _trafficSimulatorNodes;
         // private Dictionary<NPCVehicleSpawnPoint, Dictionary<ITrafficSimulator, GameObject>> _spawnLanes;
-        private GameObject _dummyEgo;
+        // private GameObject _dummyEgo;
+
 
         // public List<TrafficLaneComponent> TrafficLaneComponents;
     }
@@ -65,41 +68,44 @@ namespace AWSIM.TrafficSimulationECS
     {
         public override void Bake(TrafficManagerECS authoring)
         {
-
-            var spawner = CreateAdditionalEntity(TransformUsageFlags.Dynamic, entityName: "NpcSpawner");
-            AddComponent(spawner, new NPCVehicleSpawnerComponent
+            foreach (var randomTrafficSim in authoring.randomTrafficSims)
             {
-                SpawnRate = 20,
-                seed = authoring.seed,
-                maxVehicleCount = authoring.maxVehicleCount,
-            });
-            AddComponent(spawner, new NPCVehicleConfigComponent
-            {
-                acceleration = authoring.vehicleConfig.Acceleration,
-                deceleration = authoring.vehicleConfig.Deceleration,
-                suddenDeceleration = authoring.vehicleConfig.SuddenDeceleration,
-                absoluteDeceleration = authoring.vehicleConfig.AbsoluteDeceleration,
-                yawSpeedMultiplier = AWSIM.TrafficSimulation.NPCVehicleConfig.YawSpeedMultiplier,
-                yawSpeedLerpFactor = AWSIM.TrafficSimulation.NPCVehicleConfig.YawSpeedLerpFactor,
-                slowSpeed = AWSIM.TrafficSimulation.NPCVehicleConfig.SlowSpeed,
-            });
-
-            AddBuffer<SpawnLanes>(spawner);
-            foreach(var spawnLane in authoring.randomTrafficSims[0].spawnableLanes)
-            {
-                AppendToBuffer(spawner, new SpawnLanes { Value = toTrafficLaneComponent(spawnLane)});
-            }
-            AddBuffer<NpcPrefabs>(spawner);
-            foreach(var npcPrefab in authoring.randomTrafficSims[0].npcPrefabs)
-            {
-                AppendToBuffer(spawner, new NpcPrefabs { 
-                    Entity = GetEntity(npcPrefab, TransformUsageFlags.Dynamic),
-                    BoundsCenter = npcPrefab.GetComponent<NPCVehicle>().Bounds.center,
-                    BoundsExtents = npcPrefab.GetComponent<NPCVehicle>().Bounds.extents,
-                    BoundsMax = npcPrefab.GetComponent<NPCVehicle>().Bounds.max,
-                    BoundsMin = npcPrefab.GetComponent<NPCVehicle>().Bounds.min,
-                    BoundsSize = npcPrefab.GetComponent<NPCVehicle>().Bounds.size,
+                var spawner = CreateAdditionalEntity(TransformUsageFlags.Dynamic, entityName: "NpcSpawner");
+                AddComponent(spawner, new NPCVehicleSpawnerComponent
+                {
+                    seed = authoring.seed,
+                    maxVehicleCount = authoring.maxVehicleCount,
                 });
+                AddComponent(spawner, new NPCVehicleConfigComponent
+                {
+                    acceleration = authoring.vehicleConfig.Acceleration,
+                    deceleration = authoring.vehicleConfig.Deceleration,
+                    suddenDeceleration = authoring.vehicleConfig.SuddenDeceleration,
+                    absoluteDeceleration = authoring.vehicleConfig.AbsoluteDeceleration,
+                    yawSpeedMultiplier = AWSIM.TrafficSimulation.NPCVehicleConfig.YawSpeedMultiplier,
+                    yawSpeedLerpFactor = AWSIM.TrafficSimulation.NPCVehicleConfig.YawSpeedLerpFactor,
+                    slowSpeed = AWSIM.TrafficSimulation.NPCVehicleConfig.SlowSpeed,
+                    debugMode = authoring.debugMode
+                });
+
+                AddBuffer<SpawnLanes>(spawner);
+                foreach(var spawnLane in randomTrafficSim.spawnableLanes)
+                {
+                    AppendToBuffer(spawner, new SpawnLanes { Value = toTrafficLaneComponent(spawnLane)});
+                }
+                AddBuffer<NpcPrefabs>(spawner);
+                foreach(var npcPrefab in randomTrafficSim.npcPrefabs)
+                {
+                    AppendToBuffer(spawner, new NpcPrefabs { 
+                        Entity = GetEntity(npcPrefab, TransformUsageFlags.Dynamic),
+                        BoundsCenter = npcPrefab.GetComponent<NPCVehicle>().Bounds.center,
+                        BoundsExtents = npcPrefab.GetComponent<NPCVehicle>().Bounds.extents,
+                        BoundsMax = npcPrefab.GetComponent<NPCVehicle>().Bounds.max,
+                        BoundsMin = npcPrefab.GetComponent<NPCVehicle>().Bounds.min,
+                        BoundsSize = npcPrefab.GetComponent<NPCVehicle>().Bounds.size,
+                    });
+                }
+
             }
 
             var allTrafficLanes = GameObject.FindObjectsOfType<AWSIM.TrafficSimulation.TrafficLane>();

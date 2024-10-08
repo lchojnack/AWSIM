@@ -13,6 +13,7 @@ namespace AWSIM.TrafficSimulationECS
         public float yawSpeedMultiplier;
         public float yawSpeedLerpFactor;
         public float slowSpeed;
+        public bool debugMode;
     }
 
     public enum NPCVehicleSpeedMode

@@ -6,6 +6,7 @@ using Unity.Transforms;
 using UnityEngine;
 using GeometryUtility = AWSIM.Lanelet.GeometryUtility;
 using System.Collections.Generic;
+
 namespace AWSIM.TrafficSimulationECS
 {
 
@@ -15,6 +16,12 @@ namespace AWSIM.TrafficSimulationECS
     {
         private const float MinFrontVehicleDistance = 4f;
         private const float MinStopDistance = 1.5f;
+
+        // dynamics settings const values.
+        const float maxSteerAngle = 40f;                    // deg
+        const float maxSteerSpeed = 60f;                    // deg/s
+        const float maxVerticalSpeed = 40;                  // m/s
+        const float maxSlope = 45;                          // deg
 
         [BurstCompile]
         public void OnCreate(ref SystemState state)
@@ -55,7 +62,7 @@ namespace AWSIM.TrafficSimulationECS
         private void NextWaypointCheckJob(ref NPCVehicleComponent npc, ref SystemState state)
         {
             var distanceToCurrentWaypoint = GeometryUtility.Distance2D(npc.targetPoint, npc.position);
-            var isCloseToTarget = distanceToCurrentWaypoint <= 2f;
+            var isCloseToTarget = distanceToCurrentWaypoint <= npc.frontCenterLocalPosition.z;
 
             if(!isCloseToTarget)
             {
@@ -66,7 +73,7 @@ namespace AWSIM.TrafficSimulationECS
             if (npc.waypointIndex >= (waypoints.Length-1))
             {
                 // equivalent to extend following lanes
-                var nextTrafficLane = getNextTrafficLane(ref state, npc.currentTrafficLane.trafficLaneId);
+                var nextTrafficLane = getNextTrafficLane(ref state, npc.currentTrafficLane.trafficLaneId, npc.config.debugMode);
                 if(nextTrafficLane.trafficLaneId == -1)
                 {
                     npc.shouldDespawn = true;
@@ -233,7 +240,6 @@ namespace AWSIM.TrafficSimulationECS
 
         private void UpdatePose(ref LocalTransform localTransform, ref NPCVehicleComponent npc, ref SystemState state, float deltaTime)
         {
-            // LocalTransform localTransform = new LocalTransform{Position = npc.position, Rotation = };
             if (npc.shouldDespawn)
             {
                 return;
@@ -291,21 +297,37 @@ namespace AWSIM.TrafficSimulationECS
             // vehicle.SetPosition(state.Position);
             // vehicle.SetRotation(Quaternion.AngleAxis(state.Yaw, Vector3.up));
 
+
             localTransform.Position = npc.position;
+
+            // var rotation = Quaternion.AngleAxis(npc.yaw, Vector3.up);
+            // var inputAngles = rotation.eulerAngles;
+            // var rigidbodyAngles = new Quaternion{
+            //     x = localTransform.Rotation.value.x,
+            //     y = localTransform.Rotation.value.y,
+            //     z = localTransform.Rotation.value.z,
+            //     w = localTransform.Rotation.value.w
+            // };
+            // Vector3 euler = rigidbodyAngles.eulerAngles;
+            // var pitch = 0;//ClampDegree360(euler.x, maxSlope);
+            // var roll = 0;//ClampDegree360(rigidbodyAngles.z, maxSlope);
+            // var quat = Quaternion.Euler(pitch, inputAngles.y, roll);
+            // localTransform.Rotation = quat;
             localTransform.Rotation = Quaternion.AngleAxis(npc.yaw, Vector3.up);
             // vehicle.SetRotation(Quaternion.AngleAxis(state.Yaw, Vector3.up));
         }
 
-        public void SetPosition(ref NPCVehicleComponent npc ,float3 position)
+        public void SetPosition(ref LocalTransform localTransform, float3 position)
         {
-            var maxVerticalSpeed = 40f;
+            localTransform.Position = position;
+
         //     rigidbody.MovePosition(new Vector3(position.x, rigidbody.position.y, position.z));
             // var velocityY = Mathf.Min(rigidbody.velocity.y, maxVerticalSpeed);
             // npc.rigidbody.velocity = new Vector3(0, velocityY, 0);
         }
 
-        // public void SetRotation(Quaternion rotation)
-        // {
+        public void SetRotation(ref NPCVehicleComponent npc, Quaternion rotation)
+        {
         //     var inputAngles = rotation.eulerAngles;
         //     var rigidbodyAngles = rigidbody.rotation.eulerAngles;
         //     var pitch = ClampDegree360(rigidbodyAngles.x, maxSlope);
@@ -313,24 +335,25 @@ namespace AWSIM.TrafficSimulationECS
         //     rigidbody.MoveRotation(Quaternion.Euler(pitch, inputAngles.y, roll));
         //     var angularVelocity = rigidbody.angularVelocity;
         //     rigidbody.angularVelocity = new Vector3(angularVelocity.x, 0f, angularVelocity.z);
+        }
 
-        //     static float ClampDegree360(float value, float maxAbsValue)
-        //     {
-        //         if (value < 360f - maxAbsValue && value > 180f)
-        //         {
-        //             return 360f - maxAbsValue;
-        //         }
 
-        //         if (value > maxAbsValue && value <= 180f)
-        //         {
-        //             return maxAbsValue;
-        //         }
+        private float ClampDegree360(float value, float maxAbsValue)
+        {
+            if (value < 360f - maxAbsValue && value > 180f)
+            {
+                return 360f - maxAbsValue;
+            }
 
-        //         return value;
-        //     }
-        // }
+            if (value > maxAbsValue && value <= 180f)
+            {
+                return maxAbsValue;
+            }
 
-        private TrafficLaneComponent getNextTrafficLane(ref SystemState state, int trafficLaneId)
+            return value;
+        }
+
+        private TrafficLaneComponent getNextTrafficLane(ref SystemState state, int trafficLaneId, bool debugMode)
         {
             EntityManager entityManager = state.EntityManager;
             foreach (Unity.Entities.Entity entityTL in entityManager.GetAllEntities(Allocator.Temp))
@@ -345,9 +368,11 @@ namespace AWSIM.TrafficSimulationECS
                         {
                             return new TrafficLaneComponent{trafficLaneId = -1};
                         }
-                        // TODO make it random
                         var nextLane = nextLanes[UnityEngine.Random.Range(0, nextLanes.Length)].Value; 
-                        // var nextLane = nextLanes[0].Value; 
+                        if (debugMode)
+                        {
+                            nextLane = nextLanes[0].Value; 
+                        }
                         return nextLane;
                     }
                 }

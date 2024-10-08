@@ -4,6 +4,7 @@ using Unity.Collections;
 using Unity.Mathematics;
 using Unity.Transforms;
 using UnityEngine;
+using GeometryUtility = AWSIM.Lanelet.GeometryUtility;
 
 namespace AWSIM.TrafficSimulationECS
 {
@@ -35,23 +36,20 @@ namespace AWSIM.TrafficSimulationECS
             if (spawner.ValueRW.spawnedVehicle < spawner.ValueRO.maxVehicleCount)
             {
                 var npcPrefabs = state.EntityManager.GetBuffer<NpcPrefabs>(spawnerEntity);
-                // TODO make it random
                 var npcPrefab = npcPrefabs[UnityEngine.Random.Range(0, npcPrefabs.Length)];
-                // var npcPrefab = npcPrefabs[0];
-
-                // FixedString64Bytes newName = $"NPC.{i}";
-                // ecb.SetName(newEntity, newName);
-
+                if (config.ValueRO.debugMode)
+                {
+                    npcPrefab = npcPrefabs[0];
+                }
                 var spawnLanes = state.EntityManager.GetBuffer<SpawnLanes>(spawnerEntity);
-                // TODO make it random
                 var spawnLane = spawnLanes[UnityEngine.Random.Range(0, spawnLanes.Length)].Value;
-                // var spawnLane = spawnLanes[0].Value;
+                if(config.ValueRO.debugMode)
+                {
+                    spawnLane = spawnLanes[0].Value;
+                }
                 var waypoints = getWaypoints(ref state, spawnLane);
                 Quaternion rotation = Quaternion.LookRotation(Forward(waypoints),  Vector3.up);
-                var isSpawnable = IsSpawnable(ref state, spawnLane);
-                // var isSpawnable = IsSpawnable(npcPrefab.BoundsCenter, npcPrefab.BoundsExtents, Forward(waypoints) ,waypoints[0].Value);
-                // FixedString64Bytes newName = $"isSpawnable {isSpawnable}";
-                // Debug.Log(newName);
+                var isSpawnable = IsSpawnable(ref state, waypoints[0].Value, npcPrefab.BoundsMax);
                 if(isSpawnable)
                 {
                     Unity.Entities.Entity newEntity = ecb.Instantiate(npcPrefab.Entity);
@@ -76,7 +74,7 @@ namespace AWSIM.TrafficSimulationECS
             ecb.Playback(state.EntityManager);
         }
 
-        public static bool IsSpawnable(ref SystemState state, TrafficLaneComponent spawnLane)
+        public static bool IsSpawnable(ref SystemState state, float3 spawnPoint, float3 bounds)
         {
             NativeArray<Unity.Entities.Entity> entities = state.EntityManager.GetAllEntities(Allocator.Temp);
             var isSpawnable = true;
@@ -86,7 +84,9 @@ namespace AWSIM.TrafficSimulationECS
                 if(state.EntityManager.HasComponent<NPCVehicleComponent>(entity))
                 {
                     NPCVehicleComponent npc = state.EntityManager.GetComponentData<NPCVehicleComponent>(entity);
-                    if(npc.currentTrafficLane.trafficLaneId == spawnLane.trafficLaneId)
+                    var distanceToCurrentWaypoint = GeometryUtility.Distance2D(spawnPoint, npc.position);
+                    var isClose = distanceToCurrentWaypoint <= 2f + bounds.z;
+                    if(isClose)
                     {
                         return false;
                     }
@@ -94,22 +94,6 @@ namespace AWSIM.TrafficSimulationECS
             }
 
             return isSpawnable;
-        }
-
-        public static bool IsSpawnable(float3 BoundsCenter, float3 BoundsExtents, float3 npcVehicleSpawnPointForward, float3 npcVehicleSpawnPointPosition)
-        {
-            var npcPos = new Vector3{x = npcVehicleSpawnPointPosition.x, y = npcVehicleSpawnPointPosition.y, z = npcVehicleSpawnPointPosition.z};
-            var rotation = Quaternion.LookRotation(npcVehicleSpawnPointForward);
-            var center = rotation * BoundsCenter + npcPos;
-            // FixedString64Bytes mask = "Ground";
-            // var ignoreGroundLayerMask = ~LayerMask.GetMask(mask);
-            var ignoreGroundLayerMask = -129;
-            return !Physics.CheckBox(
-                center,
-                BoundsExtents,
-                rotation,
-                ignoreGroundLayerMask,
-                QueryTriggerInteraction.Ignore);
         }
 
         private float3 Forward(DynamicBuffer<Waypoints> waypoints)
