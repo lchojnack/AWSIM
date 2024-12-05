@@ -48,7 +48,7 @@ namespace AWSIM.TrafficSimulationECS
         public bool isStoppedByFrontVehicle;
 
         // output from cognition (way following)
-        public TrafficLaneComponent currentTrafficLane;  
+        public Unity.Entities.Entity currentTrafficLane;
         public int waypointIndex;
 
         // Output from Cognition (Curve)

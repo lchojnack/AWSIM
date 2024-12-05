@@ -14,7 +14,7 @@ namespace AWSIM.TrafficSimulationECS
     [InternalBufferCapacity(16)]
     public struct NextLanes : IBufferElementData
     {
-        public TrafficLaneComponent Value;
+        public Unity.Entities.Entity Entity;
     }
 
     public enum TurnDirectionType
@@ -29,7 +29,7 @@ namespace AWSIM.TrafficSimulationECS
     {
         public int trafficLaneId;
         public TurnDirectionType turnDirection;
-        public int stopLine;
+        public Unity.Entities.Entity stopLine;
         public float speedLimit;
         public bool intersectionLane;
     }

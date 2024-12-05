@@ -8,7 +8,7 @@ namespace AWSIM.TrafficSimulationECS
     [InternalBufferCapacity(50)]
     public struct SpawnLanes : IBufferElementData
     {
-        public TrafficLaneComponent Value;
+        public Unity.Entities.Entity Entity;
     }
 
     [InternalBufferCapacity(15)]

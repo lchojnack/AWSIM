@@ -8,20 +8,6 @@ using Unity.Mathematics;
 
 namespace AWSIM.TrafficSimulationECS
 {
-    // public class TrafficManagerECSHelper : MonoBehaviour
-    // {
-
-    //     private void Awake()
-    //     {
-    //         Debug.Log("ECS Start");
-    //     }
-
-    //     private void Update()
-    //     {
-    //         Debug.Log("ECS update");
-    //     }
-    // }
-
     public class TrafficManagerECS : MonoBehaviour, ITrafficManagerTest
     {
         public bool debugMode = false;
@@ -44,32 +30,6 @@ namespace AWSIM.TrafficSimulationECS
 
 
         public RandomTrafficSimulatorConfiguration[] randomTrafficSims;
-
-        // public Unity.Entities.Entity ballEntity;
-
-        // private EntityManager manager;
-
-        // private void Awake()
-        // {
-        //     Debug.Log("ECS Start");
-        //     manager = World.DefaultGameObjectInjectionWorld.EntityManager;
-        //     // var query = manager.CreateEntityQuery(typeof(NPCVehicleSpawnerComponent));
-        //     // Debug.Log($"query len {query.CalculateEntityCount()}");
-        //     // finder.AddSharedComponentFilter(new SceneSection {SceneGUID = subScene.SceneGUID});
-        //     // var root = finder.GetSingletonEntity();
-        //     // var origin = manager.GetComponentData<NPCVehicleSpawnerComponent>(root);
-        // }
-
-        // private void Update()
-        // {
-        //     var query = manager.CreateEntityQuery(typeof(NPCVehicleSpawnerComponent));
-        //     if(query.CalculateEntityCount() == 1)
-        //     {
-        //         var entities = query.ToEntityArray(Allocator.TempJob);
-        //         var data = manager.GetComponentData<NPCVehicleSpawnerComponent>(entities[0]);
-        //         currentVehicleCount = data.currentVehicleCount;
-        //     }
-        // }
 
         public void RestartTraffic()
         {
@@ -96,6 +56,37 @@ namespace AWSIM.TrafficSimulationECS
         {
             foreach (var randomTrafficSim in authoring.randomTrafficSims)
             {
+                var allTrafficLanes = GameObject.FindObjectsOfType<AWSIM.TrafficSimulation.TrafficLane>();
+                var trafficLanesDatabase = new Dictionary<string, Unity.Entities.Entity>();
+
+                foreach (var trafficLane in allTrafficLanes)
+                {
+                    var tlEntity = CreateAdditionalEntity(TransformUsageFlags.Dynamic, entityName: trafficLane.name);
+                    trafficLanesDatabase.Add(trafficLane.name, tlEntity);
+                    AddComponent(tlEntity, toTrafficLaneComponent(trafficLane));
+                    AddBuffer<Waypoints>(tlEntity);
+                    foreach(var waypoint in trafficLane.Waypoints)
+                    {
+                        AppendToBuffer(tlEntity, new Waypoints { Value = waypoint});
+                    }
+                }
+
+                foreach (var trafficLane in allTrafficLanes)
+                {
+                    var tlEntity = trafficLanesDatabase[trafficLane.name];
+                    AddBuffer<NextLanes>(tlEntity);
+                    foreach(var nextLane in trafficLane.NextLanes)
+                    {
+                        if(toID(nextLane) == -1)
+                        {
+                            continue;
+                        }
+                        AppendToBuffer(tlEntity, new NextLanes { 
+                            Entity = trafficLanesDatabase[nextLane.name]
+                        });
+                    }
+                }
+
                 var spawner = CreateAdditionalEntity(TransformUsageFlags.Dynamic, entityName: "NpcSpawner");
                 AddComponent(spawner, new NPCVehicleSpawnerComponent
                 {
@@ -119,7 +110,9 @@ namespace AWSIM.TrafficSimulationECS
                 AddBuffer<SpawnLanes>(spawner);
                 foreach(var spawnLane in randomTrafficSim.spawnableLanes)
                 {
-                    AppendToBuffer(spawner, new SpawnLanes { Value = toTrafficLaneComponent(spawnLane)});
+                    AppendToBuffer(spawner, new SpawnLanes {
+                        Entity = trafficLanesDatabase[spawnLane.name]
+                    });
                 }
                 AddBuffer<NpcPrefabs>(spawner);
                 foreach(var npcPrefab in randomTrafficSim.npcPrefabs)
@@ -136,22 +129,7 @@ namespace AWSIM.TrafficSimulationECS
 
             }
 
-            var allTrafficLanes = GameObject.FindObjectsOfType<AWSIM.TrafficSimulation.TrafficLane>();
-            foreach (var trafficLane in allTrafficLanes)
-            {
-                var tlEntity = CreateAdditionalEntity(TransformUsageFlags.Dynamic, entityName: trafficLane.name);
-                AddComponent(tlEntity, toTrafficLaneComponent(trafficLane));
-                AddBuffer<Waypoints>(tlEntity);
-                foreach(var waypoint in trafficLane.Waypoints)
-                {
-                    AppendToBuffer(tlEntity, new Waypoints { Value = waypoint});
-                }
-                AddBuffer<NextLanes>(tlEntity);
-                foreach(var nextLane in trafficLane.NextLanes)
-                {
-                    AppendToBuffer(tlEntity, new NextLanes { Value = toTrafficLaneComponent(nextLane)});
-                }
-            }
+
         }
 
         private TrafficLaneComponent toTrafficLaneComponent(AWSIM.TrafficSimulation.TrafficLane trafficLane)

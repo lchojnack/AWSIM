@@ -20,13 +20,11 @@ namespace AWSIM.TrafficSimulationECS
         public void OnCreate(ref SystemState state)
         {
             state.RequireForUpdate<NPCVehicleSpawnerComponent>();   
-            
         }
 
         [BurstCompile]
         public void OnUpdate(ref SystemState state)
         {
-            // state.Enabled = false;
             var spawnerEntity = SystemAPI.GetSingletonEntity<NPCVehicleSpawnerComponent>();
             var spawner = SystemAPI.GetComponentRW<NPCVehicleSpawnerComponent>(spawnerEntity);
             var config = SystemAPI.GetComponentRW<NPCVehicleConfigComponent>(spawnerEntity);
@@ -46,19 +44,20 @@ namespace AWSIM.TrafficSimulationECS
                     npcPrefab = npcPrefabs[0];
                 }
                 var spawnLanes = state.EntityManager.GetBuffer<SpawnLanes>(spawnerEntity);
-                var spawnLane = spawnLanes[UnityEngine.Random.Range(0, spawnLanes.Length)].Value;
+                var randomIndex = UnityEngine.Random.Range(0, spawnLanes.Length);
                 if(config.ValueRO.debugMode)
                 {
-                    spawnLane = spawnLanes[0].Value;
+                    randomIndex = 0;
                 }
-                var waypoints = getWaypoints(ref state, spawnLane);
+                var spawnLaneEntity = spawnLanes[randomIndex].Entity;
+                var waypoints = state.EntityManager.GetBuffer<Waypoints>(spawnLaneEntity);
                 Quaternion rotation = Quaternion.LookRotation(Forward(waypoints),  Vector3.up);
                 var isSpawnable = IsSpawnable(ref state, waypoints[0].Value, npcPrefab.BoundsMax);
                 if(isSpawnable)
                 {
                     Unity.Entities.Entity newEntity = ecb.Instantiate(npcPrefab.Entity);
                     ecb.AddComponent(newEntity, new NPCVehicleComponent{
-                        currentTrafficLane = spawnLane,
+                        currentTrafficLane = spawnLaneEntity,
                         position = waypoints[0].Value,
                         yaw = rotation.eulerAngles.y,
                         waypointIndex = 0,
@@ -78,7 +77,7 @@ namespace AWSIM.TrafficSimulationECS
             ecb.Playback(state.EntityManager);
         }
 
-        public static bool IsSpawnable(ref SystemState state, float3 spawnPoint, float3 bounds)
+        public bool IsSpawnable(ref SystemState state, float3 spawnPoint, float3 bounds)
         {
             NativeArray<Unity.Entities.Entity> entities = state.EntityManager.GetAllEntities(Allocator.Temp);
             var isSpawnable = true;
@@ -89,7 +88,8 @@ namespace AWSIM.TrafficSimulationECS
                 {
                     NPCVehicleComponent npc = state.EntityManager.GetComponentData<NPCVehicleComponent>(entity);
                     var distanceToCurrentWaypoint = GeometryUtility.Distance2D(spawnPoint, npc.position);
-                    var isClose = distanceToCurrentWaypoint <= bounds.z;
+                    // var isClose = distanceToCurrentWaypoint <= bounds.z;
+                    var isClose = distanceToCurrentWaypoint <= 0.1;
                     if(isClose)
                     {
                         return false;
@@ -108,24 +108,6 @@ namespace AWSIM.TrafficSimulationECS
                 ? Position - waypoints[waypointIndex - 1].Value
                 : waypoints[waypointIndex + 1].Value - Position;
             return rotation;
-        } 
-
-        private DynamicBuffer<Waypoints> getWaypoints(ref SystemState state, TrafficLaneComponent trafficLane)
-        {
-            EntityManager entityManager = state.EntityManager;
-            foreach (Unity.Entities.Entity entityTL in entityManager.GetAllEntities(Allocator.Temp))
-            {
-                if(entityManager.HasComponent<TrafficLaneComponent>(entityTL))
-                {
-                    var tl = entityManager.GetComponentData<TrafficLaneComponent>(entityTL);
-                    if(tl.trafficLaneId == trafficLane.trafficLaneId)
-                    {
-                        var waypoints = entityManager.GetBuffer<Waypoints>(entityTL);
-                        return waypoints;
-                    }
-                }
-            }
-            return new DynamicBuffer<Waypoints>();
         }
     }
 }

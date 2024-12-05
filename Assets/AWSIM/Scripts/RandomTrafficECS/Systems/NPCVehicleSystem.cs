@@ -37,7 +37,7 @@ namespace AWSIM.TrafficSimulationECS
             {
                 NPCVehicleCognitionStep(ref npc.ValueRW, ref state);
                 NPCVehicleDecisionStep(ref npc.ValueRW, ref state);
-                NPCVehicleControlStep(ref localTransform.ValueRW, ref npc.ValueRW, ref state);              
+                NPCVehicleControlStep(ref npc.ValueRW, ref state);              
                 NPCVehicleVisualizationStep(ref localTransform.ValueRW, ref npc.ValueRW);
             }
         }
@@ -59,20 +59,28 @@ namespace AWSIM.TrafficSimulationECS
                 return;
             }
 
-            var waypoints = getWaypoints(ref state, npc.currentTrafficLane.trafficLaneId);
+            var waypoints = state.EntityManager.GetBuffer<Waypoints>(npc.currentTrafficLane);
             if (npc.waypointIndex >= (waypoints.Length-1))
             {
                 // equivalent to extend following lanes
-                var nextTrafficLane = getNextTrafficLane(ref state, npc.currentTrafficLane.trafficLaneId, npc.config.debugMode);
-                npc.currentTrafficLane = nextTrafficLane;
-                npc.waypointIndex = 1;
+                var nextLanes = state.EntityManager.GetBuffer<NextLanes>(npc.currentTrafficLane);
+                if(nextLanes.Length != 0)
+                {
+                    var randomIndex = UnityEngine.Random.Range(0, nextLanes.Length);
+                    if(npc.config.debugMode)
+                    {
+                        randomIndex = 0;
+                    }
+                    npc.currentTrafficLane = nextLanes[randomIndex].Entity;
+                    npc.waypointIndex = 1;
+                }
             }       
             else
             {
                 npc.waypointIndex += 1;
             }
 
-            if(npc.currentTrafficLane.trafficLaneId == -1)
+            if(state.EntityManager.GetBuffer<NextLanes>(npc.currentTrafficLane).Length == 0)
             {
                 npc.shouldDespawn = true;
             }
@@ -86,7 +94,7 @@ namespace AWSIM.TrafficSimulationECS
             }
 
             var currentForward = Quaternion.AngleAxis(npc.yaw, Vector3.up) * Vector3.forward;
-            var waypoints = getWaypoints(ref state, npc.currentTrafficLane.trafficLaneId);
+            var waypoints = state.EntityManager.GetBuffer<Waypoints>(npc.currentTrafficLane);
             var currentWaypointIndex = npc.waypointIndex;
             var elapsedDistance = Vector3.Distance(FrontCenterPosition(ref npc), waypoints[currentWaypointIndex].Value);
             var turnAngle = 0f;
@@ -110,18 +118,19 @@ namespace AWSIM.TrafficSimulationECS
 
         private void NPCVehicleDecisionStep(ref NPCVehicleComponent npc, ref SystemState state)
         {
+            // note: NPCVehicleDecitionStep is the same as in TrafficSimulator
             UpdateTargetPoint(ref npc, ref state);
             UpdateSpeedMode(ref npc, ref state);
         }
 
         private void UpdateTargetPoint(ref NPCVehicleComponent npc, ref SystemState state)
         {
-            if (npc.shouldDespawn || npc.currentTrafficLane.trafficLaneId == -1)
+            if (npc.shouldDespawn || npc.currentTrafficLane == null)
             {
                 return;
             }
 
-            var waypoints = getWaypoints(ref state, npc.currentTrafficLane.trafficLaneId);
+            var waypoints = state.EntityManager.GetBuffer<Waypoints>(npc.currentTrafficLane);
             npc.targetPoint = waypoints[npc.waypointIndex].Value;
         }
 
@@ -207,11 +216,12 @@ namespace AWSIM.TrafficSimulationECS
         }
 
 
-        private void NPCVehicleControlStep(ref LocalTransform localTransform, ref NPCVehicleComponent npc, ref SystemState state)
+        private void NPCVehicleControlStep(ref NPCVehicleComponent npc, ref SystemState state)
         {
+            // note: NPCVehicleControlStep is the same as in TrafficSimulator
             var deltaTime = SystemAPI.Time.DeltaTime;
             UpdateSpeed(ref npc, ref state, deltaTime);
-            UpdatePose(ref localTransform, ref npc, ref state, deltaTime);
+            UpdatePose(ref npc, ref state, deltaTime);
             UpdateYawSpeed(ref npc, ref state, deltaTime);
         }
 
@@ -227,11 +237,11 @@ namespace AWSIM.TrafficSimulationECS
             switch (npc.speedMode)
             {
                 case NPCVehicleSpeedMode.NORMAL:
-                    targetSpeed = npc.currentTrafficLane.speedLimit;
+                    targetSpeed = state.EntityManager.GetComponentData<TrafficLaneComponent>(npc.currentTrafficLane).speedLimit;
                     acceleration = npc.config.acceleration;
                     break;
                 case NPCVehicleSpeedMode.SLOW:
-                    targetSpeed = Mathf.Min(npc.config.slowSpeed, npc.currentTrafficLane.speedLimit);
+                    targetSpeed = Mathf.Min(npc.config.slowSpeed, state.EntityManager.GetComponentData<TrafficLaneComponent>(npc.currentTrafficLane).speedLimit);
                     acceleration = npc.config.deceleration;
                     break;
                 case NPCVehicleSpeedMode.SUDDEN_STOP:
@@ -255,7 +265,7 @@ namespace AWSIM.TrafficSimulationECS
             npc.speed = Mathf.MoveTowards(npc.speed, targetSpeed, acceleration * deltaTime);
         }
 
-        private void UpdatePose(ref LocalTransform localTransform, ref NPCVehicleComponent npc, ref SystemState state, float deltaTime)
+        private void UpdatePose(ref NPCVehicleComponent npc, ref SystemState state, float deltaTime)
         {
             if (npc.shouldDespawn)
             {
@@ -264,7 +274,7 @@ namespace AWSIM.TrafficSimulationECS
 
             npc.yaw += npc.yawSpeed * deltaTime;
             var position = npc.position;
-            position += localTransform.Forward() * npc.speed * deltaTime;
+            position += Forward(ref npc) * npc.speed * deltaTime;
             position.y = npc.targetPoint.y;
             npc.position = position;
         }
@@ -326,52 +336,6 @@ namespace AWSIM.TrafficSimulationECS
             }
 
             return value;
-        }
-
-        private TrafficLaneComponent getNextTrafficLane(ref SystemState state, int trafficLaneId, bool debugMode)
-        {
-            EntityManager entityManager = state.EntityManager;
-            foreach (Unity.Entities.Entity entityTL in entityManager.GetAllEntities(Allocator.Temp))
-            {
-                if(entityManager.HasComponent<TrafficLaneComponent>(entityTL))
-                {
-                    var trafficLane = entityManager.GetComponentData<TrafficLaneComponent>(entityTL);
-                    if(trafficLane.trafficLaneId == trafficLaneId)
-                    {
-                        var nextLanes = entityManager.GetBuffer<NextLanes>(entityTL);
-                        if(nextLanes.Length == 0)
-                        {
-                            return new TrafficLaneComponent{trafficLaneId = -1};
-                        }
-                        var nextLane = nextLanes[UnityEngine.Random.Range(0, nextLanes.Length)].Value; 
-                        if (debugMode)
-                        {
-                            nextLane = nextLanes[0].Value; 
-                        }
-                        return nextLane;
-                    }
-                }
-            }
-            return new TrafficLaneComponent{trafficLaneId = -1};
-        }
-
-
-        private DynamicBuffer<Waypoints> getWaypoints(ref SystemState state, int trafficLaneId)
-        {
-            EntityManager entityManager = state.EntityManager;
-            foreach (Unity.Entities.Entity entityTL in entityManager.GetAllEntities(Allocator.Temp))
-            {
-                if(entityManager.HasComponent<TrafficLaneComponent>(entityTL))
-                {
-                    var tl = entityManager.GetComponentData<TrafficLaneComponent>(entityTL);
-                    if(tl.trafficLaneId == trafficLaneId)
-                    {
-                        var waypoints = entityManager.GetBuffer<Waypoints>(entityTL);
-                        return waypoints;
-                    }
-                }
-            }
-            return new DynamicBuffer<Waypoints>();
         }
     }
 }
