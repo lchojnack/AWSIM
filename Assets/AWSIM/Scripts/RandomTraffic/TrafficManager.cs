@@ -8,7 +8,7 @@ namespace AWSIM.TrafficSimulation
     /// Component for managing traffic simulators. Traffic manager collets all traffic simulators and manages the spawning process.
     /// - Reproducibility by Seed value
     /// </summary>
-    public class TrafficManager : MonoBehaviour
+    public class TrafficManager : MonoBehaviour, ITrafficManagerTest
     {
         [SerializeField, Tooltip("Seed value for random generator.")]
         public int seed;
@@ -24,6 +24,7 @@ namespace AWSIM.TrafficSimulation
         [SerializeField, Tooltip("A maximum number of vehicles that can simultaneously live in the scene. Lowering this value results in less dense traffic but improves the simulator's performance.")]
         public int maxVehicleCount = 100;
         public int targetVehicleCount = 10;
+        public int currentVehicleCount = 0;
 
         [SerializeField, Tooltip("Ego vehicle handler. If not set, the manager creates a dummy ego. This reference is also set automatically when the Ego spawns via the traffic simulator.")]
         private GameObject _egoVehicle;
@@ -220,6 +221,8 @@ namespace AWSIM.TrafficSimulation
                     if (!NPCVehicleSpawner.IsSpawnable(prefab.GetComponent<NPCVehicle>().Bounds, spawnLoc.Key))
                         continue;
                     var spawned = trafficSim.Spawn(prefab, spawnLoc.Key, out spawnedVehicle);
+                    if(spawned)
+                        currentVehicleCount +=1;
                 }
                 else
                 {
@@ -259,6 +262,7 @@ namespace AWSIM.TrafficSimulation
                 if (state.ShouldDespawn)
                 {
                     Object.DestroyImmediate(state.Vehicle.gameObject);
+                    currentVehicleCount -=1;
                 }
             }
             NpcVehicleSimulator.RemoveInvalidVehicles();
@@ -301,6 +305,20 @@ namespace AWSIM.TrafficSimulation
                 DrawSpawnPoints();
 
             Gizmos.color = defaultColor;
+        }
+
+
+        public void setMaxVehicleCount(int max)
+        {
+            maxVehicleCount = max;
+        }
+        public void setTargetVehicleCount(int target)
+        {
+            targetVehicleCount = target;
+        }
+        public int getCurrentVehicleCount()
+        {
+            return currentVehicleCount;
         }
     }
 }

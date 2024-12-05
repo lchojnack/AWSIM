@@ -37,7 +37,7 @@ namespace AWSIM.TrafficSimulationECS
                     if(npc.shouldDespawn)
                     {
                         ecb.DestroyEntity(entity);
-                        spawner.ValueRW.spawnedVehicle -= 1;
+                        spawner.ValueRW.currentVehicleCount -= 1;
                     }
                 }
             }

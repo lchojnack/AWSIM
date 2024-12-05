@@ -211,6 +211,12 @@ namespace AWSIM
             rigidbody.centerOfMass = transform.InverseTransformPoint(centerOfMass.position);
             lastPosition = rigidbody.position;
             wheelbase = axleSettings.GetWheelBase();
+
+            // var rigidbodies = GetComponentsInChildren<Rigidbody>();
+            // foreach (var rb in rigidbodies)
+            // {
+            //     rb.gameObject.SetActive(false);
+            // }
         }
 
         // Update is called once per frame

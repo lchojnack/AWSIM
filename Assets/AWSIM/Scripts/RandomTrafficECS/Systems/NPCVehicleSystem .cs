@@ -33,36 +33,26 @@ namespace AWSIM.TrafficSimulationECS
         [BurstCompile]
         public void OnUpdate(ref SystemState state)
         {
-            EntityManager entityManager = state.EntityManager;
-            NativeArray<Unity.Entities.Entity> entities = entityManager.GetAllEntities(Allocator.Temp);
-
-            foreach (Unity.Entities.Entity entity in entities)
+            foreach (var (localTransform, npc) in SystemAPI.Query<RefRW<LocalTransform>,RefRW<NPCVehicleComponent>>())
             {
-                if(entityManager.HasComponent<NPCVehicleComponent>(entity))
-                {
-                    NPCVehicleComponent npc = entityManager.GetComponentData<NPCVehicleComponent>(entity);
-                    LocalTransform localTransform = state.EntityManager.GetComponentData<LocalTransform>(entity);
-
-                    NPCVehicleCognitionStep(ref npc, ref state);
-                    NPCVehicleDecisionStep(ref npc, ref state);
-                    NPCVehicleControlStep(ref localTransform, ref npc, ref state);              
-                    NPCVehicleVisualizationStep(ref localTransform, ref npc);
-
-                    entityManager.SetComponentData<LocalTransform>(entity, localTransform);
-                    entityManager.SetComponentData<NPCVehicleComponent>(entity, npc);
-                }
+                NPCVehicleCognitionStep(ref npc.ValueRW, ref state);
+                NPCVehicleDecisionStep(ref npc.ValueRW, ref state);
+                NPCVehicleControlStep(ref localTransform.ValueRW, ref npc.ValueRW, ref state);              
+                NPCVehicleVisualizationStep(ref localTransform.ValueRW, ref npc.ValueRW);
             }
         }
 
         private void NPCVehicleCognitionStep(ref NPCVehicleComponent npc, ref SystemState state)
         {
             NextWaypointCheckJob(ref npc, ref state);
+            CurveCheckJob(ref npc, ref state);
         }
 
         private void NextWaypointCheckJob(ref NPCVehicleComponent npc, ref SystemState state)
         {
             var distanceToCurrentWaypoint = GeometryUtility.Distance2D(npc.targetPoint, npc.position);
-            var isCloseToTarget = distanceToCurrentWaypoint <= npc.frontCenterLocalPosition.z;
+            npc.distanceToCurrentWaypoint = distanceToCurrentWaypoint;
+            var isCloseToTarget = distanceToCurrentWaypoint <= 4f;
 
             if(!isCloseToTarget)
             {
@@ -74,22 +64,49 @@ namespace AWSIM.TrafficSimulationECS
             {
                 // equivalent to extend following lanes
                 var nextTrafficLane = getNextTrafficLane(ref state, npc.currentTrafficLane.trafficLaneId, npc.config.debugMode);
-                if(nextTrafficLane.trafficLaneId == -1)
-                {
-                    npc.shouldDespawn = true;
-                }
-                else
-                {
-                    npc.currentTrafficLane = nextTrafficLane;
-                    npc.waypointIndex = 1;
-                }
+                npc.currentTrafficLane = nextTrafficLane;
+                npc.waypointIndex = 1;
             }       
             else
             {
                 npc.waypointIndex += 1;
-                npc.targetPoint = waypoints[npc.waypointIndex].Value;
+            }
+
+            if(npc.currentTrafficLane.trafficLaneId == -1)
+            {
+                npc.shouldDespawn = true;
             }
         }
+
+        private void CurveCheckJob(ref NPCVehicleComponent npc, ref SystemState state)
+        {
+            if (npc.shouldDespawn)
+            {
+                return;
+            }
+
+            var currentForward = Quaternion.AngleAxis(npc.yaw, Vector3.up) * Vector3.forward;
+            var waypoints = getWaypoints(ref state, npc.currentTrafficLane.trafficLaneId);
+            var currentWaypointIndex = npc.waypointIndex;
+            var elapsedDistance = Vector3.Distance(FrontCenterPosition(ref npc), waypoints[currentWaypointIndex].Value);
+            var turnAngle = 0f;
+            while (elapsedDistance < 40f)
+            {
+                var currentWaypoint = waypoints[currentWaypointIndex].Value;
+                currentWaypointIndex++;
+
+                if (currentWaypointIndex >= (waypoints.Length-1))
+                    break;
+
+                var nextWaypoint = waypoints[currentWaypointIndex].Value;
+                var nextForward = nextWaypoint - currentWaypoint;
+                elapsedDistance += Vector3.Distance(currentWaypoint, nextWaypoint);
+                turnAngle += Vector3.Angle(currentForward, nextForward);
+                currentForward = nextForward;
+            }
+
+            npc.isTurning = turnAngle > 45f;
+        }   
 
         private void NPCVehicleDecisionStep(ref NPCVehicleComponent npc, ref SystemState state)
         {
@@ -97,15 +114,15 @@ namespace AWSIM.TrafficSimulationECS
             UpdateSpeedMode(ref npc, ref state);
         }
 
-        private static void UpdateTargetPoint(ref NPCVehicleComponent npc, ref SystemState state)
+        private void UpdateTargetPoint(ref NPCVehicleComponent npc, ref SystemState state)
         {
             if (npc.shouldDespawn || npc.currentTrafficLane.trafficLaneId == -1)
             {
                 return;
             }
 
-            // var waypoints = getWaypoints(ref state, npc.currentTrafficLane.trafficLaneId);
-            // npc.targetPoint = waypoints[npc.waypointIndex].Value;
+            var waypoints = getWaypoints(ref state, npc.currentTrafficLane.trafficLaneId);
+            npc.targetPoint = waypoints[npc.waypointIndex].Value;
         }
 
         private void UpdateSpeedMode(ref NPCVehicleComponent npc, ref SystemState state)
@@ -283,7 +300,6 @@ namespace AWSIM.TrafficSimulationECS
         private void NPCVehicleVisualizationStep(ref LocalTransform localTransform, ref NPCVehicleComponent npc)
         {
             ApplyPose(ref localTransform, ref npc);
-            // ApplyTurnSignalState()
         }
 
         private static void ApplyPose(ref LocalTransform localTransform, ref NPCVehicleComponent npc)
@@ -293,50 +309,9 @@ namespace AWSIM.TrafficSimulationECS
                 return;
             }
 
-            // var vehicle = state.Vehicle;
-            // vehicle.SetPosition(state.Position);
-            // vehicle.SetRotation(Quaternion.AngleAxis(state.Yaw, Vector3.up));
-
-
             localTransform.Position = npc.position;
-
-            // var rotation = Quaternion.AngleAxis(npc.yaw, Vector3.up);
-            // var inputAngles = rotation.eulerAngles;
-            // var rigidbodyAngles = new Quaternion{
-            //     x = localTransform.Rotation.value.x,
-            //     y = localTransform.Rotation.value.y,
-            //     z = localTransform.Rotation.value.z,
-            //     w = localTransform.Rotation.value.w
-            // };
-            // Vector3 euler = rigidbodyAngles.eulerAngles;
-            // var pitch = 0;//ClampDegree360(euler.x, maxSlope);
-            // var roll = 0;//ClampDegree360(rigidbodyAngles.z, maxSlope);
-            // var quat = Quaternion.Euler(pitch, inputAngles.y, roll);
-            // localTransform.Rotation = quat;
             localTransform.Rotation = Quaternion.AngleAxis(npc.yaw, Vector3.up);
-            // vehicle.SetRotation(Quaternion.AngleAxis(state.Yaw, Vector3.up));
         }
-
-        public void SetPosition(ref LocalTransform localTransform, float3 position)
-        {
-            localTransform.Position = position;
-
-        //     rigidbody.MovePosition(new Vector3(position.x, rigidbody.position.y, position.z));
-            // var velocityY = Mathf.Min(rigidbody.velocity.y, maxVerticalSpeed);
-            // npc.rigidbody.velocity = new Vector3(0, velocityY, 0);
-        }
-
-        public void SetRotation(ref NPCVehicleComponent npc, Quaternion rotation)
-        {
-        //     var inputAngles = rotation.eulerAngles;
-        //     var rigidbodyAngles = rigidbody.rotation.eulerAngles;
-        //     var pitch = ClampDegree360(rigidbodyAngles.x, maxSlope);
-        //     var roll = ClampDegree360(rigidbodyAngles.z, maxSlope);
-        //     rigidbody.MoveRotation(Quaternion.Euler(pitch, inputAngles.y, roll));
-        //     var angularVelocity = rigidbody.angularVelocity;
-        //     rigidbody.angularVelocity = new Vector3(angularVelocity.x, 0f, angularVelocity.z);
-        }
-
 
         private float ClampDegree360(float value, float maxAbsValue)
         {

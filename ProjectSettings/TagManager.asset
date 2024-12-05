@@ -17,6 +17,7 @@ TagManager:
   - MainCanvas
   - CameraOutputCanvas
   - InteractiveNpcs
+  - TrafficManager
   layers:
   - Default
   - TransparentFX

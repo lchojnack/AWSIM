@@ -40,6 +40,8 @@ namespace AWSIM.TrafficSimulationECS
 
     public struct NPCVehicleComponent : IComponentData
     {
+        public float distanceToCurrentWaypoint;
+
         public float3 frontCenterLocalPosition;
         public float3 backCenterLocalPosition;
         public NPCVehicleConfigComponent config;
@@ -56,7 +58,7 @@ namespace AWSIM.TrafficSimulationECS
         public float distanceToFrontVehicle;
 
         // Output from Cognition (Right of Way)
-        // public TrafficLane? YieldLane { get; set; }
+        public TrafficLaneComponent yieldLane;
         public NPCVehicleYieldPhase yieldPhase;
         public float3 yieldPoint;
 

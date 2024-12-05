@@ -1,14 +1,28 @@
 using Unity.Entities;
 using UnityEngine;
 using System.Collections.Generic;
+using AWSIM;
 
 using Unity.Collections;
 using Unity.Mathematics;
 
 namespace AWSIM.TrafficSimulationECS
 {
+    // public class TrafficManagerECSHelper : MonoBehaviour
+    // {
 
-    public class TrafficManagerECS : MonoBehaviour
+    //     private void Awake()
+    //     {
+    //         Debug.Log("ECS Start");
+    //     }
+
+    //     private void Update()
+    //     {
+    //         Debug.Log("ECS update");
+    //     }
+    // }
+
+    public class TrafficManagerECS : MonoBehaviour, ITrafficManagerTest
     {
         public bool debugMode = false;
 
@@ -25,43 +39,55 @@ namespace AWSIM.TrafficSimulationECS
 
         [SerializeField, Tooltip("A maximum number of vehicles that can simultaneously live in the scene. Lowering this value results in less dense traffic but improves the simulator's performance.")]
         public int maxVehicleCount = 100;
-        // public int targetVehicleCount = 10;
+        public int targetVehicleCount = 10;
+        public int currentVehicleCount = 0;
 
-        // [SerializeField, Tooltip("Ego vehicle handler. If not set, the manager creates a dummy ego. This reference is also set automatically when the Ego spawns via the traffic simulator.")]
-        // private GameObject _egoVehicle;
 
-        // public GameObject egoVehicle
+        public RandomTrafficSimulatorConfiguration[] randomTrafficSims;
+
+        // public Unity.Entities.Entity ballEntity;
+
+        // private EntityManager manager;
+
+        // private void Awake()
         // {
-        //     get => _egoVehicle;
-        //     set
+        //     Debug.Log("ECS Start");
+        //     manager = World.DefaultGameObjectInjectionWorld.EntityManager;
+        //     // var query = manager.CreateEntityQuery(typeof(NPCVehicleSpawnerComponent));
+        //     // Debug.Log($"query len {query.CalculateEntityCount()}");
+        //     // finder.AddSharedComponentFilter(new SceneSection {SceneGUID = subScene.SceneGUID});
+        //     // var root = finder.GetSingletonEntity();
+        //     // var origin = manager.GetComponentData<NPCVehicleSpawnerComponent>(root);
+        // }
+
+        // private void Update()
+        // {
+        //     var query = manager.CreateEntityQuery(typeof(NPCVehicleSpawnerComponent));
+        //     if(query.CalculateEntityCount() == 1)
         //     {
-        //         _egoVehicle = value;
-        //         if (_egoVehicle != null)
-        //         {
-        //             NpcVehicleSimulator.RegisterEgo(value);
-        //         }
-        //         else
-        //         {
-        //             NpcVehicleSimulator.UnregisterEgo();
-        //             _egoVehicle = _dummyEgo;
-        //         }
+        //         var entities = query.ToEntityArray(Allocator.TempJob);
+        //         var data = manager.GetComponentData<NPCVehicleSpawnerComponent>(entities[0]);
+        //         currentVehicleCount = data.currentVehicleCount;
         //     }
         // }
 
-        [Header("Debug")]
-        // [SerializeField] protected bool showGizmos = false;
-        // [SerializeField] protected bool showYieldingPhase = false;
-        // [SerializeField] protected bool showObstacleChecking = false;
-        // [SerializeField] protected bool showSpawnPoints = false;
-        public RandomTrafficSimulatorConfiguration[] randomTrafficSims;
-        // public RouteTrafficSimulatorConfiguration[] routeTrafficSims;
-        // public NPCVehicleSimulator NpcVehicleSimulator;
-        // private List<ITrafficSimulator> _trafficSimulatorNodes;
-        // private Dictionary<NPCVehicleSpawnPoint, Dictionary<ITrafficSimulator, GameObject>> _spawnLanes;
-        // private GameObject _dummyEgo;
+        public void RestartTraffic()
+        {
 
+        }
 
-        // public List<TrafficLaneComponent> TrafficLaneComponents;
+        public void setMaxVehicleCount(int max)
+        {
+            maxVehicleCount = max;
+        }
+        public void setTargetVehicleCount(int target)
+        {
+            targetVehicleCount = target;
+        }
+        public int getCurrentVehicleCount()
+        {
+            return currentVehicleCount;
+        }
     }
 
     public class TrafficManagerECSBaker : Baker<TrafficManagerECS>
@@ -75,6 +101,8 @@ namespace AWSIM.TrafficSimulationECS
                 {
                     seed = authoring.seed,
                     maxVehicleCount = authoring.maxVehicleCount,
+                    targetVehicleCount = authoring.targetVehicleCount,
+                    currentVehicleCount = 0,
                 });
                 AddComponent(spawner, new NPCVehicleConfigComponent
                 {

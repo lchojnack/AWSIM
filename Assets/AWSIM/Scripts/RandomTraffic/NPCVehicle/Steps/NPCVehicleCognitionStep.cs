@@ -1067,23 +1067,23 @@ namespace AWSIM.TrafficSimulation
             JobHandle.ScheduleBatchedJobs();
 
             Profiler.EndSample();
-            Profiler.BeginSample("Cognition.CheckRightOfWay");
+            // Profiler.BeginSample("Cognition.CheckRightOfWay");
 
-            new RightOfWayCheckJob
-            {
-                EGOTransform = egoTransform,
-                States = states
-            }.Execute();
+            // new RightOfWayCheckJob
+            // {
+            //     EGOTransform = egoTransform,
+            //     States = states
+            // }.Execute();
 
-            Profiler.EndSample();
-            Profiler.BeginSample("Cognition.CheckTrafficLight");
+            // Profiler.EndSample();
+            // Profiler.BeginSample("Cognition.CheckTrafficLight");
 
-            new TrafficLightCheckJob
-            {
-                States = states
-            }.Execute();
+            // new TrafficLightCheckJob
+            // {
+            //     States = states
+            // }.Execute();
 
-            Profiler.EndSample();
+            // Profiler.EndSample();
             Profiler.BeginSample("Cognition.WaitJobs");
 
             obstacleCheckJobHandle.Complete();

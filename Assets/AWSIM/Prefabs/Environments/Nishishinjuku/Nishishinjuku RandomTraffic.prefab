@@ -57729,7 +57729,8 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 128
   maxVehicleCount: 100
-  targetVehicleCount: 10
+  targetVehicleCount: 20
+  currentVehicleCount: 0
   _egoVehicle: {fileID: 0}
   showGizmos: 1
   showYieldingPhase: 1

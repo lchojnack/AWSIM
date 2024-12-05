@@ -20,6 +20,7 @@ namespace AWSIM.TrafficSimulationECS
         public void OnCreate(ref SystemState state)
         {
             state.RequireForUpdate<NPCVehicleSpawnerComponent>();   
+            
         }
 
         [BurstCompile]
@@ -32,9 +33,12 @@ namespace AWSIM.TrafficSimulationECS
 
             EntityCommandBuffer ecb = new EntityCommandBuffer(Allocator.Temp);
 
-            // for (var i = 0; i < spawner.ValueRO.maxVehicleCount; i++)
-            if (spawner.ValueRW.spawnedVehicle < spawner.ValueRO.maxVehicleCount)
+            if (spawner.ValueRW.currentVehicleCount < spawner.ValueRO.maxVehicleCount)
             {
+                if(spawner.ValueRW.currentVehicleCount >= spawner.ValueRO.targetVehicleCount)
+                {
+                    return;
+                }
                 var npcPrefabs = state.EntityManager.GetBuffer<NpcPrefabs>(spawnerEntity);
                 var npcPrefab = npcPrefabs[UnityEngine.Random.Range(0, npcPrefabs.Length)];
                 if (config.ValueRO.debugMode)
@@ -68,7 +72,7 @@ namespace AWSIM.TrafficSimulationECS
                     });
                     ecb.SetComponent(newEntity, LocalTransform.FromPositionRotation(waypoints[0].Value, rotation));
 
-                    spawner.ValueRW.spawnedVehicle += 1;
+                    spawner.ValueRW.currentVehicleCount += 1;
                 }
             }
             ecb.Playback(state.EntityManager);
@@ -85,7 +89,7 @@ namespace AWSIM.TrafficSimulationECS
                 {
                     NPCVehicleComponent npc = state.EntityManager.GetComponentData<NPCVehicleComponent>(entity);
                     var distanceToCurrentWaypoint = GeometryUtility.Distance2D(spawnPoint, npc.position);
-                    var isClose = distanceToCurrentWaypoint <= 2f + bounds.z;
+                    var isClose = distanceToCurrentWaypoint <= bounds.z;
                     if(isClose)
                     {
                         return false;
