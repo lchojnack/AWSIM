@@ -48,6 +48,66 @@ namespace AWSIM.TrafficSimulationECS
         {
             return currentVehicleCount;
         }
+
+        private void OnDrawGizmos()
+        {
+            var allTrafficLanes = GameObject.FindObjectsOfType<AWSIM.TrafficSimulation.TrafficLane>();
+            foreach (var trafficLane in allTrafficLanes)
+            {
+                DrawGizmoNonSelected(trafficLane);
+            }
+            // var allStopLines = GameObject.FindObjectsOfType<AWSIM.TrafficSimulation.StopLine>();
+            // foreach (var stopLine in allStopLines)
+            // {
+            //     DrawGizmo(stopLine);
+            // }
+        }
+
+        private static void DrawGizmoNonSelected(AWSIM.TrafficSimulation.TrafficLane trafficLane)
+        {
+            Gizmos.color = Color.blue;
+            Gizmos.DrawSphere(trafficLane.Waypoints[0], 0.3f);
+            for (int i = 1; i < trafficLane.Waypoints.Length; ++i)
+            {
+                Gizmos.DrawLine(trafficLane.Waypoints[i - 1], trafficLane.Waypoints[i]);
+                Gizmos.DrawSphere(trafficLane.Waypoints[i], 0.3f);
+            }
+
+            Gizmos.color = Color.yellow;
+
+            foreach (var lane in trafficLane.RightOfWayLanes)
+            {
+                if (lane == null)
+                {
+                    Debug.LogWarning("NullReferenceException! Please check TrafficLaneEditor.cs's RightOfWay fields for empty values.");
+                    continue;
+                }
+
+                Gizmos.DrawSphere(lane.Waypoints[0], 0.4f);
+                for (int i = 1; i < lane.Waypoints.Length; ++i)
+                {
+                    Gizmos.DrawLine(lane.Waypoints[i - 1], lane.Waypoints[i]);
+                    Gizmos.DrawSphere(lane.Waypoints[i], 0.4f);
+                }
+            }
+        }
+
+        private static void DrawGizmo(AWSIM.TrafficSimulation.StopLine stopLine)
+        {
+            var matCache = Gizmos.matrix;
+            var colorCache = Gizmos.color;
+
+            var direction = stopLine.Points[1] - stopLine.Points[0];
+            var center = (stopLine.Points[0] + stopLine.Points[1]) / 2;
+            var rotation = Quaternion.LookRotation(direction);
+            Gizmos.matrix = Matrix4x4.TRS(center, rotation, Vector3.one);
+            Gizmos.color = stopLine.HasStopSign ? Color.red : Color.white;
+            var size = new Vector3(0.3f, 1f, direction.magnitude);
+            Gizmos.DrawCube(Vector3.zero, size);
+
+            Gizmos.matrix = matCache;
+            Gizmos.color = colorCache;
+        }
     }
 
     public class TrafficManagerECSBaker : Baker<TrafficManagerECS>
@@ -56,14 +116,53 @@ namespace AWSIM.TrafficSimulationECS
         {
             foreach (var randomTrafficSim in authoring.randomTrafficSims)
             {
+                var allTrafficLights = GameObject.FindObjectsOfType<AWSIM.TrafficLight>();
+                var trafficLightEntities = new Dictionary<string, Unity.Entities.Entity>();
+                foreach (var trafficLight in allTrafficLights)
+                {
+                    var entity = CreateAdditionalEntity(TransformUsageFlags.Dynamic, entityName: trafficLight.name);
+                    trafficLightEntities.Add(trafficLight.name, entity);
+                    // AddComponent(entity, new TrafficLightComponent{});
+                    AddBuffer<BulbData>(entity);
+                    AppendToBuffer(entity, new BulbData { 
+                        type = BulbType.RED_BULB,
+                        color = BulbColor.RED,
+                        status = BulbStatus.SOLID_ON,
+                    });
+                }
+
+                var allStopLines = GameObject.FindObjectsOfType<AWSIM.TrafficSimulation.StopLine>();
+                var stopLinesEntities = new Dictionary<string, Unity.Entities.Entity>();
+                foreach (var stopLine in allStopLines)
+                {
+                    var entity = CreateAdditionalEntity(TransformUsageFlags.Dynamic, entityName: stopLine.name);
+                    stopLinesEntities.Add(stopLine.name, entity);
+                    var stopLineComponent = toStopLineComponent(stopLine);
+                    if(stopLine.TrafficLight != null)
+                    {
+                        stopLineComponent.trafficLight = trafficLightEntities[stopLine.TrafficLight.name];
+                    }
+                    AddComponent(entity, stopLineComponent);
+                    AddBuffer<Points>(entity);
+                    foreach(var point in stopLine.Points)
+                    {
+                        AppendToBuffer(entity, new Points { Value = point});
+                    }
+                }
+
                 var allTrafficLanes = GameObject.FindObjectsOfType<AWSIM.TrafficSimulation.TrafficLane>();
-                var trafficLanesDatabase = new Dictionary<string, Unity.Entities.Entity>();
+                var trafficLanesEntities = new Dictionary<string, Unity.Entities.Entity>();
 
                 foreach (var trafficLane in allTrafficLanes)
                 {
                     var tlEntity = CreateAdditionalEntity(TransformUsageFlags.Dynamic, entityName: trafficLane.name);
-                    trafficLanesDatabase.Add(trafficLane.name, tlEntity);
-                    AddComponent(tlEntity, toTrafficLaneComponent(trafficLane));
+                    trafficLanesEntities.Add(trafficLane.name, tlEntity);
+                    var trafficLaneComponent = toTrafficLaneComponent(trafficLane);
+                    if(trafficLane.StopLine != null)
+                    {
+                        trafficLaneComponent.stopLine = stopLinesEntities[trafficLane.StopLine.name];
+                    }
+                    AddComponent(tlEntity, trafficLaneComponent);
                     AddBuffer<Waypoints>(tlEntity);
                     foreach(var waypoint in trafficLane.Waypoints)
                     {
@@ -73,7 +172,7 @@ namespace AWSIM.TrafficSimulationECS
 
                 foreach (var trafficLane in allTrafficLanes)
                 {
-                    var tlEntity = trafficLanesDatabase[trafficLane.name];
+                    var tlEntity = trafficLanesEntities[trafficLane.name];
                     AddBuffer<NextLanes>(tlEntity);
                     foreach(var nextLane in trafficLane.NextLanes)
                     {
@@ -82,7 +181,7 @@ namespace AWSIM.TrafficSimulationECS
                             continue;
                         }
                         AppendToBuffer(tlEntity, new NextLanes { 
-                            Entity = trafficLanesDatabase[nextLane.name]
+                            Entity = trafficLanesEntities[nextLane.name]
                         });
                     }
                 }
@@ -111,7 +210,7 @@ namespace AWSIM.TrafficSimulationECS
                 foreach(var spawnLane in randomTrafficSim.spawnableLanes)
                 {
                     AppendToBuffer(spawner, new SpawnLanes {
-                        Entity = trafficLanesDatabase[spawnLane.name]
+                        Entity = trafficLanesEntities[spawnLane.name]
                     });
                 }
                 AddBuffer<NpcPrefabs>(spawner);
@@ -128,8 +227,6 @@ namespace AWSIM.TrafficSimulationECS
                 }
 
             }
-
-
         }
 
         private TrafficLaneComponent toTrafficLaneComponent(AWSIM.TrafficSimulation.TrafficLane trafficLane)
@@ -137,13 +234,24 @@ namespace AWSIM.TrafficSimulationECS
             if(trafficLane != null)
             {
                 return new TrafficLaneComponent {
-                    trafficLaneId = toID(trafficLane),
                     turnDirection = toTurnDirectionType(trafficLane.TurnDirection),
                     speedLimit = trafficLane.SpeedLimit,
                     intersectionLane = trafficLane.intersectionLane
                 };
             }
-            return new TrafficLaneComponent{trafficLaneId = -1};
+            return new TrafficLaneComponent{};
+        }
+
+        private StopLineComponent toStopLineComponent(AWSIM.TrafficSimulation.StopLine stopLine)
+        {
+            if(stopLine != null)
+            {
+                return new StopLineComponent {
+                    hasStopSign = stopLine.HasStopSign,
+                    centerPoint = (stopLine.Points[0] + stopLine.Points[1]) / 2f
+                };
+            }
+            return new StopLineComponent{};
         }
 
         private TurnDirectionType toTurnDirectionType(AWSIM.TrafficSimulation.TrafficLane.TurnDirectionType turnDirection)

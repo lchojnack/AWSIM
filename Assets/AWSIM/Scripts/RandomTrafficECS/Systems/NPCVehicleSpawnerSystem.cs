@@ -60,7 +60,7 @@ namespace AWSIM.TrafficSimulationECS
                         currentTrafficLane = spawnLaneEntity,
                         position = waypoints[0].Value,
                         yaw = rotation.eulerAngles.y,
-                        waypointIndex = 0,
+                        waypointIndex = 1,
                         targetPoint = waypoints[1].Value,
                         width = npcPrefab.BoundsSize.x,
                         frontCenterLocalPosition = new float3 {x = 0f, y = 0f, z = npcPrefab.BoundsMax.z},
@@ -88,7 +88,7 @@ namespace AWSIM.TrafficSimulationECS
                 {
                     NPCVehicleComponent npc = state.EntityManager.GetComponentData<NPCVehicleComponent>(entity);
                     var distanceToCurrentWaypoint = GeometryUtility.Distance2D(spawnPoint, npc.position);
-                    // var isClose = distanceToCurrentWaypoint <= bounds.z;
+                    // var isClose = distanceToCurrentWaypoint <= (2.0f*bounds.z);
                     var isClose = distanceToCurrentWaypoint <= 0.1;
                     if(isClose)
                     {

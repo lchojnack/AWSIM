@@ -50,16 +50,16 @@ namespace AWSIM.TrafficSimulationECS
 
         private void NextWaypointCheckJob(ref NPCVehicleComponent npc, ref SystemState state)
         {
-            var distanceToCurrentWaypoint = GeometryUtility.Distance2D(npc.targetPoint, npc.position);
+            var waypoints = state.EntityManager.GetBuffer<Waypoints>(npc.currentTrafficLane);
+            var distanceToCurrentWaypoint = GeometryUtility.Distance2D(waypoints[npc.waypointIndex].Value, FrontCenterPosition(ref npc));
             npc.distanceToCurrentWaypoint = distanceToCurrentWaypoint;
-            var isCloseToTarget = distanceToCurrentWaypoint <= 4f;
+            var isCloseToTarget = distanceToCurrentWaypoint <= npc.frontCenterLocalPosition.z;
 
             if(!isCloseToTarget)
             {
                 return;
             }
 
-            var waypoints = state.EntityManager.GetBuffer<Waypoints>(npc.currentTrafficLane);
             if (npc.waypointIndex >= (waypoints.Length-1))
             {
                 // equivalent to extend following lanes
@@ -80,7 +80,10 @@ namespace AWSIM.TrafficSimulationECS
                 npc.waypointIndex += 1;
             }
 
-            if(state.EntityManager.GetBuffer<NextLanes>(npc.currentTrafficLane).Length == 0)
+            waypoints = state.EntityManager.GetBuffer<Waypoints>(npc.currentTrafficLane);
+            distanceToCurrentWaypoint = GeometryUtility.Distance2D(waypoints[waypoints.Length-1].Value, FrontCenterPosition(ref npc));
+            isCloseToTarget = distanceToCurrentWaypoint <= 2.0f;
+            if(state.EntityManager.GetBuffer<NextLanes>(npc.currentTrafficLane).Length == 0 && isCloseToTarget)
             {
                 npc.shouldDespawn = true;
             }
@@ -185,6 +188,23 @@ namespace AWSIM.TrafficSimulationECS
         {
             // TODO no traffic light information so far
             var distanceToStopPointByTrafficLight = float.MaxValue;
+            // if (npc.TrafficLightLane != null)
+            // {
+            //     var distanceToStopLine =
+            //         state.SignedDistanceToPointOnLane(state.TrafficLightLane.StopLine.CenterPoint);
+            //     switch (state.TrafficLightPassability)
+            //     {
+            //         case TrafficLightPassability.GREEN:
+            //             break;
+            //         case TrafficLightPassability.YELLOW:
+            //             if (distanceToStopLine < suddenStopDistance) break;
+            //             distanceToStopPointByTrafficLight = distanceToStopLine;
+            //             break;
+            //         case TrafficLightPassability.RED:
+            //             distanceToStopPointByTrafficLight = distanceToStopLine;
+            //             break;
+            //     }
+            // }
             return onlyGreaterThan(distanceToStopPointByTrafficLight, 0);
         }
 

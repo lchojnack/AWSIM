@@ -13,8 +13,8 @@ namespace AWSIM.TrafficSimulationECS
 
     public struct StopLineComponent : IComponentData
     {
-        public int Id;
         public bool hasStopSign;
+        public float3 centerPoint;
         public Unity.Entities.Entity trafficLight;
     }
 }
