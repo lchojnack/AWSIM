@@ -17,8 +17,8 @@ namespace AWSIM.TrafficSimulationECS
         [Header("NPC Vehicle Settings")]
         [SerializeField] public AWSIM.TrafficSimulation.NPCVehicleConfig vehicleConfig = AWSIM.TrafficSimulation.NPCVehicleConfig.Default();
 
-        // [SerializeField, Tooltip("Vehicle layer for raytracing the collision distances.")]
-        // private LayerMask vehicleLayerMask;
+        [SerializeField, Tooltip("Vehicle layer for raytracing the collision distances.")]
+        public LayerMask vehicleLayerMask;
 
         // [SerializeField, Tooltip("Ground layer for raytracing the collision distances.")]
         // private LayerMask groundLayerMask;
@@ -30,6 +30,9 @@ namespace AWSIM.TrafficSimulationECS
 
 
         public RandomTrafficSimulatorConfiguration[] randomTrafficSims;
+
+
+        private EntityManager manager;
 
         public void RestartTraffic()
         {
@@ -51,17 +54,84 @@ namespace AWSIM.TrafficSimulationECS
 
         private void OnDrawGizmos()
         {
-            var allTrafficLanes = GameObject.FindObjectsOfType<AWSIM.TrafficSimulation.TrafficLane>();
-            foreach (var trafficLane in allTrafficLanes)
+            manager = World.DefaultGameObjectInjectionWorld.EntityManager;
+            var tlQuery = manager.CreateEntityQuery(typeof(TrafficLaneComponent));
+            var tlEntities = tlQuery.ToEntityArray(Allocator.TempJob);
+
+            foreach (var trafficLaneEntity in tlEntities)
             {
-                DrawGizmoNonSelected(trafficLane);
+                Gizmos.color = Color.blue;
+                var waypoints = manager.GetBuffer<Waypoints>(trafficLaneEntity);
+                Gizmos.DrawSphere(waypoints[0].Value, 0.3f);
+                for (int i = 1; i < waypoints.Length; ++i)
+                {
+                    Gizmos.DrawLine(waypoints[i - 1].Value, waypoints[i].Value);
+                    Gizmos.DrawSphere(waypoints[i].Value, 0.3f);
+                }
+
+                Gizmos.color = Color.yellow;
+
+                var rightOfWay = manager.GetBuffer<RightOfWayLanes>(trafficLaneEntity);
+                foreach (var lane in rightOfWay)
+                {
+                    var waypointsRoW = manager.GetBuffer<Waypoints>(lane.Entity);
+
+                    Gizmos.DrawSphere(waypointsRoW[0].Value, 0.4f);
+                    for (int i = 1; i < waypointsRoW.Length; ++i)
+                    {
+                        Gizmos.DrawLine(waypointsRoW[i - 1].Value, waypointsRoW[i].Value);
+                        Gizmos.DrawSphere(waypointsRoW[i].Value, 0.4f);
+                    }
+                }
             }
-            // var allStopLines = GameObject.FindObjectsOfType<AWSIM.TrafficSimulation.StopLine>();
-            // foreach (var stopLine in allStopLines)
-            // {
-            //     DrawGizmo(stopLine);
-            // }
-        }
+
+
+            var npcQuery = manager.CreateEntityQuery(typeof(NPCVehicleComponent));
+            var npcEntities = npcQuery.ToEntityArray(Allocator.TempJob);
+
+            foreach (var npcEntity in npcEntities)
+            {
+                var npc = manager.GetComponentData<NPCVehicleComponent>(npcEntity);
+                Gizmos.color = npc.isStoppedByFrontVehicle ? Color.red : Color.cyan;
+
+                    // var boxcastCount = Mathf.Min(MaxBoxcastCount, nativeStates[stateIndex].WaypointCount);
+                    // for (var commandIndex = stateIndex * MaxBoxcastCount;
+                    //         commandIndex < stateIndex * MaxBoxcastCount + boxcastCount;
+                    //         commandIndex++)
+                    // {
+                    //     var hitInfo = obstacleHitInfoArray[commandIndex];
+                    //     var hasHit = hitInfo.collider != null;
+
+                    var command = npc.boxcastCommand;
+                    var startPoint = command.center;
+                    var direction = command.direction;
+                    var distance = command.distance;
+                    // Debug.Log($"startPoint {startPoint}");
+                    // Debug.Log($"direction {direction}");
+                    // Debug.Log($"distance {distance}");
+                    // var distance = hasHit
+                    //     ? hitInfo.distance
+                    //     : command.distance;
+                    var extents = command.halfExtents;
+                    var destination = startPoint + direction;
+                    // Debug.Log($"destination {destination}");
+                    var rotation = Quaternion.LookRotation(direction);
+                    Gizmos.matrix = Matrix4x4.TRS((destination + startPoint) / 2f, rotation, Vector3.one);
+                    var cubeSize = extents * 2f;
+                    cubeSize.z = distance;
+                    Gizmos.DrawWireCube(Vector3.zero, cubeSize);
+                    Gizmos.matrix = Matrix4x4.identity;
+
+                    if(npc.isStoppedByFrontVehicle)
+                    {
+                        Gizmos.color = Color.red;
+                        Gizmos.DrawSphere(npc.raycastHit.point, 0.4f);
+                    }
+                    //     if (hasHit)
+                    //         break;
+                    // }
+            }
+       }
 
         private static void DrawGizmoNonSelected(AWSIM.TrafficSimulation.TrafficLane trafficLane)
         {
@@ -184,6 +254,17 @@ namespace AWSIM.TrafficSimulationECS
                             Entity = trafficLanesEntities[nextLane.name]
                         });
                     }
+                    AddBuffer<RightOfWayLanes>(tlEntity);
+                    foreach(var nextLane in trafficLane.RightOfWayLanes)
+                    {
+                        if(toID(nextLane) == -1)
+                        {
+                            continue;
+                        }
+                        AppendToBuffer(tlEntity, new RightOfWayLanes {
+                            Entity = trafficLanesEntities[nextLane.name]
+                        });
+                    }
                 }
 
                 var spawner = CreateAdditionalEntity(TransformUsageFlags.Dynamic, entityName: "NpcSpawner");
@@ -203,6 +284,7 @@ namespace AWSIM.TrafficSimulationECS
                     yawSpeedMultiplier = AWSIM.TrafficSimulation.NPCVehicleConfig.YawSpeedMultiplier,
                     yawSpeedLerpFactor = AWSIM.TrafficSimulation.NPCVehicleConfig.YawSpeedLerpFactor,
                     slowSpeed = AWSIM.TrafficSimulation.NPCVehicleConfig.SlowSpeed,
+                    vehicleLayerMask = authoring.vehicleLayerMask,
                     debugMode = authoring.debugMode
                 });
 

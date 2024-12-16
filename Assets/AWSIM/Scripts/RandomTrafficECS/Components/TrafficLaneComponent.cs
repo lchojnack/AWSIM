@@ -17,6 +17,12 @@ namespace AWSIM.TrafficSimulationECS
         public Unity.Entities.Entity Entity;
     }
 
+    [InternalBufferCapacity(16)]
+    public struct RightOfWayLanes : IBufferElementData
+    {
+        public Unity.Entities.Entity Entity;
+    }
+
     public enum TurnDirectionType
     {
         STRAIGHT = 0,

@@ -3,6 +3,7 @@ using Unity.Burst;
 using Unity.Collections;
 using Unity.Mathematics;
 using Unity.Transforms;
+using Unity.Rendering;
 using UnityEngine;
 using GeometryUtility = AWSIM.Lanelet.GeometryUtility;
 
@@ -68,6 +69,7 @@ namespace AWSIM.TrafficSimulationECS
                         config = config.ValueRO,
                         yieldPhase = NPCVehicleYieldPhase.NONE,
                         distanceToFrontVehicle = float.MaxValue,
+                        extents = npcPrefab.BoundsExtents,
                     });
                     ecb.SetComponent(newEntity, LocalTransform.FromPositionRotation(waypoints[0].Value, rotation));
 
@@ -88,8 +90,8 @@ namespace AWSIM.TrafficSimulationECS
                 {
                     NPCVehicleComponent npc = state.EntityManager.GetComponentData<NPCVehicleComponent>(entity);
                     var distanceToCurrentWaypoint = GeometryUtility.Distance2D(spawnPoint, npc.position);
-                    // var isClose = distanceToCurrentWaypoint <= (2.0f*bounds.z);
-                    var isClose = distanceToCurrentWaypoint <= 0.1;
+                    var isClose = distanceToCurrentWaypoint <= (2.0f*bounds.z);
+                    // var isClose = distanceToCurrentWaypoint <= 0.1;
                     if(isClose)
                     {
                         return false;

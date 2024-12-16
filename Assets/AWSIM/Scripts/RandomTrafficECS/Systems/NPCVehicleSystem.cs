@@ -3,6 +3,7 @@ using Unity.Burst;
 using Unity.Collections;
 using Unity.Mathematics;
 using Unity.Transforms;
+using Unity.Jobs;
 using UnityEngine;
 using GeometryUtility = AWSIM.Lanelet.GeometryUtility;
 using System.Collections.Generic;
@@ -14,6 +15,8 @@ namespace AWSIM.TrafficSimulationECS
     [UpdateInGroup(typeof(InitializationSystemGroup))]
     public partial struct NPCVehicleSystem : ISystem
     {
+        private const int MaxBoxcastCount = 1;
+
         private const float MinFrontVehicleDistance = 4f;
         private const float MinStopDistance = 1.5f;
 
@@ -46,6 +49,71 @@ namespace AWSIM.TrafficSimulationECS
         {
             NextWaypointCheckJob(ref npc, ref state);
             CurveCheckJob(ref npc, ref state);
+            ObstacleCheckJob(ref npc, ref state);
+            CalculateObstacleDistanceJob(ref npc, ref state);
+        }
+
+        private void ObstacleCheckJob(ref NPCVehicleComponent npc, ref SystemState state)
+        {
+            var obstacleHitInfoArray = new NativeArray<RaycastHit>(MaxBoxcastCount, Allocator.TempJob);
+            var boxcastCommands = new NativeArray<BoxcastCommand>(MaxBoxcastCount, Allocator.TempJob);
+            var waypoints = state.EntityManager.GetBuffer<Waypoints>(npc.currentTrafficLane);
+
+            npc.startPoint = npc.waypointIndex == 1
+                ? FrontCenterPosition(ref npc)
+                : waypoints[npc.waypointIndex - 1].Value;
+
+            // Reduce the detection range so that large sized vehicles can pass each other.
+            var boxCastExtents = npc.extents * 0.5f;
+            boxCastExtents.y *= 1;
+            boxCastExtents.z = 0.1f;
+            var endPoint = waypoints[npc.waypointIndex].Value;
+
+            var distance = Vector3.Distance(npc.startPoint, endPoint);
+            var direction = (endPoint - npc.startPoint);
+            var rotation = Quaternion.LookRotation(direction);
+            boxcastCommands[0] = new BoxcastCommand(
+                npc.startPoint,
+                boxCastExtents,
+                rotation,
+                direction,
+                distance,
+                npc.config.vehicleLayerMask
+            );
+            npc.boxcastCommand = boxcastCommands[0];
+
+            JobHandle boxcastJobHandle = BoxcastCommand.ScheduleBatch(boxcastCommands, obstacleHitInfoArray, 1);
+            boxcastJobHandle.Complete();
+
+            npc.raycastHit = obstacleHitInfoArray[0];
+
+            obstacleHitInfoArray.Dispose();
+            boxcastCommands.Dispose();
+
+        }
+
+        private void CalculateObstacleDistanceJob(ref NPCVehicleComponent npc, ref SystemState state)
+        {
+            var waypoints = state.EntityManager.GetBuffer<Waypoints>(npc.currentTrafficLane);
+
+            // CalculateObstacleDistanceJob starts here
+            var hasHit = false;
+            var totalDistance = 0f;
+            var boxcastCount = Mathf.Min(MaxBoxcastCount, waypoints.Length);
+
+            for (var commandIndex = 0; commandIndex < boxcastCount; commandIndex++)
+            {
+                var hit = npc.raycastHit;
+                hasHit = hit.distance != 0f || hit.point != Vector3.zero;
+                if (hasHit)
+                {
+                    totalDistance = Vector3.Distance(npc.startPoint, hit.point);
+                    break;
+                }
+                totalDistance = npc.boxcastCommand.distance;
+            }
+
+            npc.distanceToFrontVehicle = hasHit ? totalDistance : float.MaxValue;
         }
 
         private void NextWaypointCheckJob(ref NPCVehicleComponent npc, ref SystemState state)

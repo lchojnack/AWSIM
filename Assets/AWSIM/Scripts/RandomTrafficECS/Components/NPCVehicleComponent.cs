@@ -1,6 +1,7 @@
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
+using UnityEngine;
 
 namespace AWSIM.TrafficSimulationECS
 {
@@ -13,6 +14,7 @@ namespace AWSIM.TrafficSimulationECS
         public float yawSpeedMultiplier;
         public float yawSpeedLerpFactor;
         public float slowSpeed;
+        public UnityEngine.LayerMask vehicleLayerMask;
         public bool debugMode;
     }
 
@@ -41,6 +43,10 @@ namespace AWSIM.TrafficSimulationECS
     public struct NPCVehicleComponent : IComponentData
     {
         public float distanceToCurrentWaypoint;
+        public float3 extents;
+        public float3 startPoint;
+        public BoxcastCommand boxcastCommand;
+        public RaycastHit raycastHit;
 
         public float3 frontCenterLocalPosition;
         public float3 backCenterLocalPosition;
