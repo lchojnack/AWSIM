@@ -208,8 +208,11 @@ namespace AWSIM
             rightTurnSignalLight.Initialize();
             brakeLight.Initialize();
 
-            rigidbody.centerOfMass = transform.InverseTransformPoint(centerOfMass.position);
-            lastPosition = rigidbody.position;
+            if(rigidbody != null)
+            {
+                rigidbody.centerOfMass = transform.InverseTransformPoint(centerOfMass.position);
+                lastPosition = rigidbody.position;
+            }
             wheelbase = axleSettings.GetWheelBase();
 
             // var rigidbodies = GetComponentsInChildren<Rigidbody>();
@@ -338,9 +341,12 @@ namespace AWSIM
 
         void OnValidate()
         {
-            rigidbody.isKinematic = false;
-            rigidbody.useGravity = true;
-            rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
+            if (rigidbody != null)
+            {
+                rigidbody.isKinematic = false;
+                rigidbody.useGravity = true;
+                rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
+            }
         }
 
         void OnDestroy()

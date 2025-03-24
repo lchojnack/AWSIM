@@ -1,7 +1,6 @@
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
-using UnityEngine;
 
 namespace AWSIM.TrafficSimulationECS
 {
@@ -45,14 +44,15 @@ namespace AWSIM.TrafficSimulationECS
         public float distanceToCurrentWaypoint;
         public float3 extents;
         public float3 startPoint;
-        public BoxcastCommand boxcastCommand;
-        public RaycastHit raycastHit;
+        public UnityEngine.BoxcastCommand boxcastCommand;
+        public UnityEngine.RaycastHit raycastHit;
 
         public float3 frontCenterLocalPosition;
         public float3 backCenterLocalPosition;
         public NPCVehicleConfigComponent config;
         public bool isStoppedByFrontVehicle;
 
+        public Unity.Entities.Entity meshColliderComponent;
         // output from cognition (way following)
         public Unity.Entities.Entity currentTrafficLane;
         public int waypointIndex;
