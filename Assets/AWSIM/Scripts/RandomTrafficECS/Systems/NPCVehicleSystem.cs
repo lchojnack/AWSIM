@@ -67,7 +67,7 @@ namespace AWSIM.TrafficSimulationECS
             boxCastExtents.z = 0.1f;
             float3 endPoint = waypoints[npc.waypointIndex].Value;
 
-            float distance = UnityEngine.Vector3.Distance(npc.startPoint, endPoint);
+            float distance = math.distance(npc.startPoint, endPoint);
             UnityEngine.Vector3 direction = (endPoint - npc.startPoint);
             UnityEngine.Quaternion orientation = UnityEngine.Quaternion.LookRotation(direction);
 
@@ -126,22 +126,20 @@ namespace AWSIM.TrafficSimulationECS
 
             if(isCollision)
             {
-                // UnityEngine.Debug.Log($"Hits size: {hits.Length}");
-                var raycastDistance = UnityEngine.Vector3.Distance(npc.startPoint, npc.raycastHit.point);
+                // UnityEngine.Debug.Log($"Hits size: {hits.Length} from {npc.startPoint}");
+                var raycastDistance = math.distance(npc.startPoint, npc.raycastHit.point);
+                var shortestDistance = float.MaxValue;
                 foreach (var hit in hits)
                 {
-                    if(npc.meshColliderComponent != hit.Entity)
+                    var hitDistance = math.distance(npc.startPoint, hit.Position);
+                    if(npc.meshColliderComponent != hit.Entity && raycastDistance > hitDistance && shortestDistance > hitDistance)
                     {
-                        if (raycastDistance > UnityEngine.Vector3.Distance(npc.startPoint, hit.Position))
-                        {
-                            // UnityEngine.Debug.Log($"Hit : {UnityEngine.Vector3.Distance(npc.startPoint, hit.Position)}, {hit.ToString()}");
-                            npc.raycastHit.point = hit.Position;
-                            npc.raycastHit.distance = UnityEngine.Vector3.Distance(npc.startPoint, hit.Position);
-                            //Output the name of the Collider your Box hit
-                            // UnityEngine.Debug.Log($"npc.startPoint : {npc.startPoint},  hit.Position { hit.Position}");
-                            // UnityEngine.Debug.DrawLine(npc.startPoint, hit.Position, UnityEngine.Color.magenta, 1.0f);
-                            // UnityEngine.Debug.DrawLine(npc.position, hit.Position, UnityEngine.Color.blue, 0.01f);
-                        }
+
+                        // UnityEngine.Debug.Log($"Raycast Hit : {math.distance(npc.startPoint, hit.Position)}, {hit.ToString()}");
+                        npc.raycastHit.point = hit.Position;
+                        npc.raycastHit.distance = hitDistance;
+                        shortestDistance = npc.raycastHit.distance;
+
                     }
                 }
             }
@@ -164,7 +162,7 @@ namespace AWSIM.TrafficSimulationECS
                 hasHit = hit.distance != float.MaxValue || hit.point != UnityEngine.Vector3.zero;
                 if (hasHit)
                 {
-                    totalDistance = UnityEngine.Vector3.Distance(npc.startPoint, hit.point);
+                    totalDistance = math.distance(npc.startPoint, hit.point);
                     break;
                 }
                 totalDistance = npc.boxcastCommand.distance;
@@ -225,7 +223,7 @@ namespace AWSIM.TrafficSimulationECS
             var currentForward = UnityEngine.Quaternion.AngleAxis(npc.yaw, UnityEngine.Vector3.up) * UnityEngine.Vector3.forward;
             var waypoints = state.EntityManager.GetBuffer<Waypoints>(npc.currentTrafficLane);
             var currentWaypointIndex = npc.waypointIndex;
-            var elapsedDistance = UnityEngine.Vector3.Distance(FrontCenterPosition(ref npc), waypoints[currentWaypointIndex].Value);
+            var elapsedDistance = math.distance(FrontCenterPosition(ref npc), waypoints[currentWaypointIndex].Value);
             var turnAngle = 0f;
             while (elapsedDistance < 40f)
             {
@@ -237,7 +235,7 @@ namespace AWSIM.TrafficSimulationECS
 
                 var nextWaypoint = waypoints[currentWaypointIndex].Value;
                 var nextForward = nextWaypoint - currentWaypoint;
-                elapsedDistance += UnityEngine.Vector3.Distance(currentWaypoint, nextWaypoint);
+                elapsedDistance += math.distance(currentWaypoint, nextWaypoint);
                 turnAngle += UnityEngine.Vector3.Angle(currentForward, nextForward);
                 currentForward = nextForward;
             }
@@ -357,7 +355,7 @@ namespace AWSIM.TrafficSimulationECS
 
             var hasPassedThePoint = UnityEngine.Vector3.Dot(forwardVec, pointPosVec) < 0f;
 
-            var distance = UnityEngine.Vector3.Distance(position, point);
+            var distance = math.distance(position, point);
             return hasPassedThePoint ? -distance : distance;
         }
 
