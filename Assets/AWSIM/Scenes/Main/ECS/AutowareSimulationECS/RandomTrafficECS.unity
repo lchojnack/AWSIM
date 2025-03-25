@@ -1176,7 +1176,6 @@ GameObject:
   m_Component:
   - component: {fileID: 1777250571}
   - component: {fileID: 1777250572}
-  - component: {fileID: 1777250573}
   m_Layer: 0
   m_Name: RandomTrafficECS
   m_TagString: TrafficManager
@@ -1211,7 +1210,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: efdeeb2b9d7a44eee844e97db7ddafb7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  debugMode: 1
+  debugMode: 0
   seed: 0
   vehicleConfig:
     Acceleration: 3
@@ -1220,7 +1219,7 @@ MonoBehaviour:
     AbsoluteDeceleration: 20
   vehicleLayerMask:
     serializedVersion: 2
-    m_Bits: 256
+    m_Bits: 1048576
   maxVehicleCount: 300
   targetVehicleCount: 10
   currentVehicleCount: 0
@@ -1255,20 +1254,6 @@ MonoBehaviour:
     - {fileID: 1705814549}
     maximumSpawns: 0
     enabled: 1
---- !u!114 &1777250573
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1777250570}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4a5edfd69b1ded2dd99b3343cdec560a, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  MaterialA: {fileID: 10302, guid: 0000000000000000f000000000000000, type: 0}
-  MeshA: {fileID: -3298800115395149385, guid: 0225cdd88e8a7204ba8f7e15ee16089e, type: 3}
 --- !u!114 &1887328302 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 9027057600446549292, guid: 58d73df60b244d146bdf5f5896f78355, type: 3}
