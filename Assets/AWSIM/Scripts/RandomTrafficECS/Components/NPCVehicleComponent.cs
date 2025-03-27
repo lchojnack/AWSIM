@@ -44,8 +44,12 @@ namespace AWSIM.TrafficSimulationECS
         public float distanceToCurrentWaypoint;
         public float3 extents;
         public float3 startPoint;
-        public UnityEngine.BoxcastCommand boxcastCommand;
-        public UnityEngine.RaycastHit raycastHit;
+        public float3 boxcastCommandStartPoint;
+        public float3 boxcastCommandDirection;
+        public float boxcastCommandDistance;
+        public float3 boxcastCommandExtents;
+        public float raycastHitDistance;
+        public float3 raycastHitPoint;
 
         public float3 frontCenterLocalPosition;
         public float3 backCenterLocalPosition;

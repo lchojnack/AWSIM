@@ -45,6 +45,7 @@ namespace AWSIM.TrafficSimulationECS
             }
         }
 
+        [BurstCompile]
         private void NPCVehicleCognitionStep(ref NPCVehicleComponent npc, ref SystemState state)
         {
             NextWaypointCheckJob(ref npc, ref state);
@@ -53,6 +54,7 @@ namespace AWSIM.TrafficSimulationECS
             CalculateObstacleDistanceJob(ref npc, ref state);
         }
 
+        [BurstCompile]
         private void ObstacleCheckJob(ref NPCVehicleComponent npc, ref SystemState state)
         {
             var waypoints = state.EntityManager.GetBuffer<Waypoints>(npc.currentTrafficLane);
@@ -62,54 +64,55 @@ namespace AWSIM.TrafficSimulationECS
                 : waypoints[npc.waypointIndex - 1].Value;
 
             // Reduce the detection range so that large sized vehicles can pass each other.
-            UnityEngine.Vector3 boxCastExtents = npc.extents * 0.5f;
+            float3 boxCastExtents = npc.extents * 0.5f;
             boxCastExtents.y *= 1;
             boxCastExtents.z = 0.1f;
             float3 endPoint = waypoints[npc.waypointIndex].Value;
 
             float distance = math.distance(npc.startPoint, endPoint);
-            UnityEngine.Vector3 direction = (endPoint - npc.startPoint);
-            UnityEngine.Quaternion orientation = UnityEngine.Quaternion.LookRotation(direction);
+            float3 direction = (endPoint - npc.startPoint);
+            quaternion orientation = quaternion.LookRotationSafe(direction, math.up());
+
+            npc.raycastHitDistance = float.MaxValue;
+            npc.raycastHitPoint = float3.zero;
+
+            npc.boxcastCommandStartPoint = npc.startPoint;
+            npc.boxcastCommandDirection = direction;
+            npc.boxcastCommandDistance = distance;
+            npc.boxcastCommandExtents = boxCastExtents;
 
             // Boxcast command -> NPC <-> EGO
-            var obstacleHitInfoArray = new NativeArray<UnityEngine.RaycastHit>(MaxBoxcastCount, Allocator.TempJob);
-            var boxcastCommands = new NativeArray<UnityEngine.BoxcastCommand>(MaxBoxcastCount, Allocator.TempJob);
-            boxcastCommands[0] = new UnityEngine.BoxcastCommand(
-                npc.startPoint,
-                boxCastExtents,
-                orientation,
-                direction,
-                distance,
-                npc.config.vehicleLayerMask
-            );
-            npc.boxcastCommand = boxcastCommands[0];
-
-            JobHandle boxcastJobHandle = UnityEngine.BoxcastCommand.ScheduleBatch(boxcastCommands, obstacleHitInfoArray, 1);
-            boxcastJobHandle.Complete();
-
-            // UnityEngine.Debug.Log($"--------------------------------");
-            // UnityEngine.Debug.Log($"obstacleHitInfoArray size: {obstacleHitInfoArray.Length}");
-            // foreach (var obstacleHitInfo in obstacleHitInfoArray)
+            // if(npc.config.debugMode)
             // {
-            //     UnityEngine.Debug.Log($"{obstacleHitInfo.distance} {obstacleHitInfo.point}");
+            //     var obstacleHitInfoArray = new NativeArray<UnityEngine.RaycastHit>(MaxBoxcastCount, Allocator.TempJob);
+            //     var boxcastCommands = new NativeArray<UnityEngine.BoxcastCommand>(MaxBoxcastCount, Allocator.TempJob);
+            //     boxcastCommands[0] = new UnityEngine.BoxcastCommand(
+            //         npc.startPoint,
+            //         boxCastExtents,
+            //         UnityEngine.Quaternion.LookRotation(direction),
+            //         direction,
+            //         distance,
+            //         npc.config.vehicleLayerMask
+            //     );
+
+            //     JobHandle boxcastJobHandle = UnityEngine.BoxcastCommand.ScheduleBatch(boxcastCommands, obstacleHitInfoArray, 1);
+            //     boxcastJobHandle.Complete();
+
+            //     if (obstacleHitInfoArray[0].collider != null)
+            //     {
+            //         npc.raycastHitPoint = obstacleHitInfoArray[0].point;
+            //         npc.raycastHitDistance = obstacleHitInfoArray[0].distance;
+            //     }
+
+
+            //     obstacleHitInfoArray.Dispose();
+            //     boxcastCommands.Dispose();
             // }
-
-            npc.raycastHit.distance = float.MaxValue;
-            npc.raycastHit.point = UnityEngine.Vector3.zero;
-            if (obstacleHitInfoArray[0].collider != null)
-            {
-                npc.raycastHit = obstacleHitInfoArray[0];
-            }
-
-
-            obstacleHitInfoArray.Dispose();
-            boxcastCommands.Dispose();
-
 
             // ECS Boxcast -> NPC <-> NPC
             var physicsWorld = SystemAPI.GetSingleton<PhysicsWorldSingleton>();
-
             var hits = new NativeList<ColliderCastHit>(Allocator.Temp);
+
             Unity.Physics.CollisionFilter filter = new CollisionFilter{
                 BelongsTo = (uint)npc.config.vehicleLayerMask.value,
                 CollidesWith = (uint)npc.config.vehicleLayerMask.value
@@ -126,26 +129,25 @@ namespace AWSIM.TrafficSimulationECS
 
             if(isCollision)
             {
-                // UnityEngine.Debug.Log($"Hits size: {hits.Length} from {npc.startPoint}");
-                var raycastDistance = math.distance(npc.startPoint, npc.raycastHit.point);
                 var shortestDistance = float.MaxValue;
+                float3 closestHitPoint = npc.raycastHitPoint;
                 foreach (var hit in hits)
                 {
                     var hitDistance = math.distance(npc.startPoint, hit.Position);
-                    if(npc.meshColliderComponent != hit.Entity && raycastDistance > hitDistance && shortestDistance > hitDistance)
+                    if(npc.meshColliderComponent != hit.Entity && shortestDistance > hitDistance)
                     {
-
-                        // UnityEngine.Debug.Log($"Raycast Hit : {math.distance(npc.startPoint, hit.Position)}, {hit.ToString()}");
-                        npc.raycastHit.point = hit.Position;
-                        npc.raycastHit.distance = hitDistance;
-                        shortestDistance = npc.raycastHit.distance;
-
+                        shortestDistance = hitDistance;
+                        closestHitPoint = hit.Position;
                     }
                 }
+
+                npc.raycastHitPoint = closestHitPoint;
+                npc.raycastHitDistance = shortestDistance;
             }
             hits.Dispose();
         }
 
+        [BurstCompile]
         private void CalculateObstacleDistanceJob(ref NPCVehicleComponent npc, ref SystemState state)
         {
             var waypoints = state.EntityManager.GetBuffer<Waypoints>(npc.currentTrafficLane);
@@ -157,21 +159,22 @@ namespace AWSIM.TrafficSimulationECS
 
             for (var commandIndex = 0; commandIndex < boxcastCount; commandIndex++)
             {
-                var hit = npc.raycastHit;
+                // var hit = npc.raycastHit;
                 // UnityEngine.Debug.Log($"raycastHit : {hit.distance}, {hit.point}");
-                hasHit = hit.distance != float.MaxValue || hit.point != UnityEngine.Vector3.zero;
+                hasHit = npc.raycastHitDistance != float.MaxValue || math.all(npc.raycastHitPoint != float3.zero);
                 if (hasHit)
                 {
-                    totalDistance = math.distance(npc.startPoint, hit.point);
+                    totalDistance = math.distance(npc.startPoint, npc.raycastHitPoint);
                     break;
                 }
-                totalDistance = npc.boxcastCommand.distance;
+                totalDistance = npc.boxcastCommandDistance;
             }
 
             npc.distanceToFrontVehicle = hasHit ? totalDistance : float.MaxValue;
             // UnityEngine.Debug.Log($"raynpc.distanceToFrontVehiclecastHit : {npc.distanceToFrontVehicle}, {totalDistance}, {hasHit}");
         }
 
+        [BurstCompile]
         private void NextWaypointCheckJob(ref NPCVehicleComponent npc, ref SystemState state)
         {
             var waypoints = state.EntityManager.GetBuffer<Waypoints>(npc.currentTrafficLane);
@@ -213,6 +216,7 @@ namespace AWSIM.TrafficSimulationECS
             }
         }
 
+        [BurstCompile]
         private void CurveCheckJob(ref NPCVehicleComponent npc, ref SystemState state)
         {
             if (npc.shouldDespawn)
@@ -243,6 +247,7 @@ namespace AWSIM.TrafficSimulationECS
             npc.isTurning = turnAngle > 45f;
         }   
 
+        [BurstCompile]
         private void NPCVehicleDecisionStep(ref NPCVehicleComponent npc, ref SystemState state)
         {
             // note: NPCVehicleDecitionStep is the same as in TrafficSimulator
@@ -250,6 +255,7 @@ namespace AWSIM.TrafficSimulationECS
             UpdateSpeedMode(ref npc, ref state);
         }
 
+        [BurstCompile]
         private void UpdateTargetPoint(ref NPCVehicleComponent npc, ref SystemState state)
         {
             if (npc.shouldDespawn || npc.currentTrafficLane == null)
@@ -261,6 +267,7 @@ namespace AWSIM.TrafficSimulationECS
             npc.targetPoint = waypoints[npc.waypointIndex].Value;
         }
 
+        [BurstCompile]
         private void UpdateSpeedMode(ref NPCVehicleComponent npc, ref SystemState state)
         {
             if (npc.shouldDespawn)
@@ -297,6 +304,7 @@ namespace AWSIM.TrafficSimulationECS
                 npc.speedMode = NPCVehicleSpeedMode.NORMAL;
         }
 
+        [BurstCompile]
         private float CalculateYieldingDistance(ref NPCVehicleComponent npc, ref SystemState state)
         {
             // TODO no yielding information so far
@@ -308,6 +316,7 @@ namespace AWSIM.TrafficSimulationECS
             return onlyGreaterThan(distanceToStopPointByRightOfWay, 0);
         }
 
+        [BurstCompile]
         private float CalculateTrafficLightDistance(ref NPCVehicleComponent npc, ref SystemState state, float suddenStopDistance)
         {
             // TODO no traffic light information so far
@@ -332,16 +341,19 @@ namespace AWSIM.TrafficSimulationECS
             return onlyGreaterThan(distanceToStopPointByTrafficLight, 0);
         }
 
+        [BurstCompile]
         private float CalculateStoppableDistance(float speed, float deceleration)
         {
             return onlyGreaterThan(speed * speed / 2f / deceleration, 0);
         }
 
+        [BurstCompile]
         private float onlyGreaterThan(float value, float min_value = 0)
         {
             return value >= min_value ? value : float.MaxValue;
         }
 
+        [BurstCompile]
         public float SignedDistanceToPointOnLane(ref NPCVehicleComponent npc, float3 point)
         {
             var position = FrontCenterPosition(ref npc);
@@ -360,6 +372,7 @@ namespace AWSIM.TrafficSimulationECS
         }
 
 
+        [BurstCompile]
         private void NPCVehicleControlStep(ref NPCVehicleComponent npc, ref SystemState state)
         {
             // note: NPCVehicleControlStep is the same as in TrafficSimulator
@@ -369,6 +382,7 @@ namespace AWSIM.TrafficSimulationECS
             UpdateYawSpeed(ref npc, ref state, deltaTime);
         }
 
+        [BurstCompile]
         private void UpdateSpeed(ref NPCVehicleComponent npc, ref SystemState state, float deltaTime)
         {
             if (npc.shouldDespawn)
@@ -409,6 +423,7 @@ namespace AWSIM.TrafficSimulationECS
             npc.speed = UnityEngine.Mathf.MoveTowards(npc.speed, targetSpeed, acceleration * deltaTime);
         }
 
+        [BurstCompile]
         private void UpdatePose(ref NPCVehicleComponent npc, ref SystemState state, float deltaTime)
         {
             if (npc.shouldDespawn)
@@ -423,6 +438,7 @@ namespace AWSIM.TrafficSimulationECS
             npc.position = position;
         }
 
+        [BurstCompile]
         private float3 FrontCenterPosition(ref NPCVehicleComponent npc)
         {
             var x = UnityEngine.Quaternion.AngleAxis(npc.yaw, UnityEngine.Vector3.up) * npc.frontCenterLocalPosition;
@@ -431,12 +447,14 @@ namespace AWSIM.TrafficSimulationECS
         }
 
 
+        [BurstCompile]
         private float3 Forward(ref NPCVehicleComponent npc)
         {
             var x = UnityEngine.Quaternion.AngleAxis(npc.yaw, UnityEngine.Vector3.up) * UnityEngine.Vector3.forward;
             return new float3(x);
         }
 
+        [BurstCompile]
         private void UpdateYawSpeed(ref NPCVehicleComponent npc, ref SystemState state, float deltaTime)
         {
             // Steering the vehicle so that it heads toward the target point.
@@ -451,12 +469,14 @@ namespace AWSIM.TrafficSimulationECS
                 npc.config.yawSpeedLerpFactor * deltaTime);
         }
 
+        [BurstCompile]
         private void NPCVehicleVisualizationStep(ref LocalTransform localTransform, ref NPCVehicleComponent npc)
         {
             ApplyPose(ref localTransform, ref npc);
         }
 
-        private static void ApplyPose(ref LocalTransform localTransform, ref NPCVehicleComponent npc)
+        [BurstCompile]
+        private void ApplyPose(ref LocalTransform localTransform, ref NPCVehicleComponent npc)
         {
             if (npc.shouldDespawn)
             {
@@ -486,6 +506,7 @@ namespace AWSIM.TrafficSimulationECS
         //     rigidbody.angularVelocity = new UnityEngine.Vector3(angularVelocity.x, 0f, angularVelocity.z);
         // }
 
+        [BurstCompile]
         private float ClampDegree360(float value, float maxAbsValue)
         {
             if (value < 360f - maxAbsValue && value > 180f)

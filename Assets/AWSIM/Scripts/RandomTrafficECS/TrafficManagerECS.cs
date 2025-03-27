@@ -102,17 +102,17 @@ namespace AWSIM.TrafficSimulationECS
                     //     var hitInfo = obstacleHitInfoArray[commandIndex];
                     //     var hasHit = hitInfo.collider != null;
 
-                    var command = npc.boxcastCommand;
-                    var startPoint = command.center;
-                    var direction = command.direction;
-                    var distance = command.distance;
+                    // var command = npc.boxcastCommand;
+                    var startPoint = npc.boxcastCommandStartPoint;
+                    var direction = npc.boxcastCommandDirection;
+                    var distance = npc.boxcastCommandDistance;
                     // Debug.Log($"startPoint {startPoint}");
                     // Debug.Log($"direction {direction}");
                     // Debug.Log($"distance {distance}");
                     // var distance = hasHit
                     //     ? hitInfo.distance
                     //     : command.distance;
-                    var extents = command.halfExtents;
+                    var extents = npc.boxcastCommandExtents;
                     var destination = startPoint + direction;
                     // Debug.Log($"destination {destination}");
                     var rotation = Quaternion.LookRotation(direction);
@@ -125,7 +125,7 @@ namespace AWSIM.TrafficSimulationECS
                     if(npc.isStoppedByFrontVehicle)
                     {
                         Gizmos.color = Color.red;
-                        Gizmos.DrawSphere(npc.raycastHit.point, 0.4f);
+                        Gizmos.DrawSphere(npc.raycastHitPoint, 0.4f);
                     }
                     //     if (hasHit)
                     //         break;

@@ -79,6 +79,7 @@ namespace AWSIM.TrafficSimulationECS
             ecb.Playback(state.EntityManager);
         }
 
+        [BurstCompile]
         public bool IsSpawnable(ref SystemState state, float3 spawnPoint, float3 bounds)
         {
             NativeArray<Unity.Entities.Entity> entities = state.EntityManager.GetAllEntities(Allocator.Temp);
@@ -102,6 +103,7 @@ namespace AWSIM.TrafficSimulationECS
             return isSpawnable;
         }
 
+        [BurstCompile]
         private float3 Forward(DynamicBuffer<Waypoints> waypoints)
         {
             var waypointIndex = 0;
