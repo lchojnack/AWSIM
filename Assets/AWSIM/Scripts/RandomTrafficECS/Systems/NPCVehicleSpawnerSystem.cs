@@ -4,7 +4,6 @@ using Unity.Collections;
 using Unity.Mathematics;
 using Unity.Transforms;
 using Unity.Rendering;
-using UnityEngine;
 using GeometryUtility = AWSIM.Lanelet.GeometryUtility;
 
 namespace AWSIM.TrafficSimulationECS
@@ -17,15 +16,22 @@ namespace AWSIM.TrafficSimulationECS
 
         private EntityQuery _roadNodeGroup;
 
+        private Unity.Mathematics.Random _random;
+
+        private BufferLookup<Waypoints> _waypointsLookup;
+
         [BurstCompile]
         public void OnCreate(ref SystemState state)
         {
-            state.RequireForUpdate<NPCVehicleSpawnerComponent>();   
+            state.RequireForUpdate<NPCVehicleSpawnerComponent>();
+            _random = new Unity.Mathematics.Random((uint)(SystemAPI.Time.ElapsedTime * 100000) + 1);
+            _waypointsLookup = state.GetBufferLookup<Waypoints>(true);
         }
 
         [BurstCompile]
         public void OnUpdate(ref SystemState state)
         {
+            _waypointsLookup.Update(ref state);
             var spawnerEntity = SystemAPI.GetSingletonEntity<NPCVehicleSpawnerComponent>();
             var spawner = SystemAPI.GetComponentRW<NPCVehicleSpawnerComponent>(spawnerEntity);
             var config = SystemAPI.GetComponentRW<NPCVehicleConfigComponent>(spawnerEntity);
@@ -39,20 +45,20 @@ namespace AWSIM.TrafficSimulationECS
                     return;
                 }
                 var npcPrefabs = state.EntityManager.GetBuffer<NpcPrefabs>(spawnerEntity);
-                var npcPrefab = npcPrefabs[UnityEngine.Random.Range(0, npcPrefabs.Length)];
+                var npcPrefab = npcPrefabs[_random.NextInt(0, npcPrefabs.Length)];
                 if (config.ValueRO.debugMode)
                 {
                     npcPrefab = npcPrefabs[0];
                 }
                 var spawnLanes = state.EntityManager.GetBuffer<SpawnLanes>(spawnerEntity);
-                var randomIndex = UnityEngine.Random.Range(0, spawnLanes.Length);
+                var randomIndex = _random.NextInt(0, spawnLanes.Length);
                 if(config.ValueRO.debugMode)
                 {
                     randomIndex = 0;
                 }
                 var spawnLaneEntity = spawnLanes[randomIndex].Entity;
-                var waypoints = state.EntityManager.GetBuffer<Waypoints>(spawnLaneEntity);
-                Quaternion rotation = Quaternion.LookRotation(Forward(waypoints),  Vector3.up);
+                var waypoints = _waypointsLookup[spawnLaneEntity];
+                quaternion rotation = quaternion.LookRotationSafe(Forward(waypoints),  math.up());
                 var isSpawnable = IsSpawnable(ref state, waypoints[0].Value, npcPrefab.BoundsMax);
                 if(isSpawnable)
                 {
@@ -60,7 +66,7 @@ namespace AWSIM.TrafficSimulationECS
                     ecb.AddComponent(newEntity, new NPCVehicleComponent{
                         currentTrafficLane = spawnLaneEntity,
                         position = waypoints[0].Value,
-                        yaw = rotation.eulerAngles.y,
+                        yaw = GetYawFromQuaternion(rotation),
                         waypointIndex = 1,
                         targetPoint = waypoints[1].Value,
                         width = npcPrefab.BoundsSize.x,
@@ -77,6 +83,14 @@ namespace AWSIM.TrafficSimulationECS
                 }
             }
             ecb.Playback(state.EntityManager);
+        }
+
+        [BurstCompile]
+        public static float GetYawFromQuaternion(in quaternion rot)
+        {
+            float siny_cosp = 2f * (rot.value.w * rot.value.y + rot.value.x * rot.value.z);
+            float cosy_cosp = 1f - 2f * (rot.value.y * rot.value.y + rot.value.z * rot.value.z);
+            return math.degrees(math.atan2(siny_cosp, cosy_cosp));
         }
 
         [BurstCompile]

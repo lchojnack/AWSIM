@@ -13,7 +13,7 @@ namespace AWSIM.TrafficSimulationECS
         public bool debugMode = false;
 
         [SerializeField, Tooltip("Seed value for random generator.")]
-        public int seed;
+        public uint seed;
         [Header("NPC Vehicle Settings")]
         [SerializeField] public AWSIM.TrafficSimulation.NPCVehicleConfig vehicleConfig = AWSIM.TrafficSimulation.NPCVehicleConfig.Default();
 
