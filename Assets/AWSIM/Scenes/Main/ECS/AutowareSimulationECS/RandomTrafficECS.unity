@@ -1210,8 +1210,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: efdeeb2b9d7a44eee844e97db7ddafb7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  debugMode: 0
-  seed: 0
+  debugMode: 1
+  seed: 1
   vehicleConfig:
     Acceleration: 3
     Deceleration: 2
@@ -1221,7 +1221,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 1048576
   maxVehicleCount: 300
-  targetVehicleCount: 10
+  targetVehicleCount: 2
   currentVehicleCount: 0
   randomTrafficSims:
   - npcPrefabs:

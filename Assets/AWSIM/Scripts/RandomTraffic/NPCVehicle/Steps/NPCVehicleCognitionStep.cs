@@ -1069,13 +1069,13 @@ namespace AWSIM.TrafficSimulation
             Profiler.EndSample();
             // Profiler.BeginSample("Cognition.CheckRightOfWay");
 
-            // new RightOfWayCheckJob
-            // {
-            //     EGOTransform = egoTransform,
-            //     States = states
-            // }.Execute();
+            new RightOfWayCheckJob
+            {
+                EGOTransform = egoTransform,
+                States = states
+            }.Execute();
 
-            // Profiler.EndSample();
+            Profiler.EndSample();
             // Profiler.BeginSample("Cognition.CheckTrafficLight");
 
             // new TrafficLightCheckJob

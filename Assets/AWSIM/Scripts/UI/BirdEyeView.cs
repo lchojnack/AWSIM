@@ -53,7 +53,7 @@ namespace AWSIM.Scripts.UI
 
             // Initialize the BEV camera
             _birdEyeCamera = InitializeBirdEyeCamera();
-            _birdEyeCamera.enabled = false;
+            _birdEyeCamera.enabled = true;
 
             // Add to the list of cameras for GraphicsSettings
             OnCameraInitialized?.Invoke(_birdEyeCamera.gameObject);
