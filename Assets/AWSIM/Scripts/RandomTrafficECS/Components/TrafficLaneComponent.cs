@@ -33,6 +33,7 @@ namespace AWSIM.TrafficSimulationECS
 
     public struct TrafficLaneComponent : IComponentData
     {
+        public FixedString32Bytes name;
         public TurnDirectionType turnDirection;
         public Unity.Entities.Entity stopLine;
         public float speedLimit;

@@ -17,6 +17,18 @@ namespace AWSIM.TrafficSimulationECS
         public bool debugMode;
     }
 
+    [InternalBufferCapacity(15)]
+    public struct NPCVehicleBoxCasts : IBufferElementData
+    {
+        public float3 startPoint;
+        public float3 direction;
+        public float distance;
+        public float3 extents;
+        public float3 raycastHitPoint;
+        public float raycastHitDistance;
+        public bool raycastHit;
+    }
+
     public enum NPCVehicleSpeedMode
     {
         NORMAL = 1,
@@ -44,12 +56,6 @@ namespace AWSIM.TrafficSimulationECS
         public float distanceToCurrentWaypoint;
         public float3 extents;
         public float3 startPoint;
-        public float3 boxcastCommandStartPoint;
-        public float3 boxcastCommandDirection;
-        public float boxcastCommandDistance;
-        public float3 boxcastCommandExtents;
-        public float raycastHitDistance;
-        public float3 raycastHitPoint;
 
         public float3 frontCenterLocalPosition;
         public float3 backCenterLocalPosition;
@@ -68,9 +74,14 @@ namespace AWSIM.TrafficSimulationECS
         public float distanceToFrontVehicle;
 
         // Output from Cognition (Right of Way)
-        public TrafficLaneComponent yieldLane;
+        public Unity.Entities.Entity yieldLane;
         public NPCVehicleYieldPhase yieldPhase;
         public float3 yieldPoint;
+
+        public float distanceToIntersection;
+        public bool obstructedByVehicleBehindIntersection;
+
+        public float3 dominatingVehiclePosition;
 
         // output from decision
         public float3 targetPoint;

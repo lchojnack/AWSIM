@@ -62,6 +62,8 @@ namespace AWSIM.TrafficSimulationECS
                 var isSpawnable = IsSpawnable(ref state, waypoints[0].Value, npcPrefab.BoundsMax);
                 if(isSpawnable)
                 {
+                    if(spawner.ValueRW.currentVehicleCount >= 1)
+                        config.ValueRW.debugMode = false;
                     Unity.Entities.Entity newEntity = ecb.Instantiate(npcPrefab.Entity);
                     ecb.AddComponent(newEntity, new NPCVehicleComponent{
                         currentTrafficLane = spawnLaneEntity,
@@ -74,10 +76,12 @@ namespace AWSIM.TrafficSimulationECS
                         backCenterLocalPosition = new float3 {x = 0f, y = 0f, z = npcPrefab.BoundsMin.z},
                         config = config.ValueRO,
                         yieldPhase = NPCVehicleYieldPhase.NONE,
+                        distanceToIntersection = float.MaxValue,
                         distanceToFrontVehicle = float.MaxValue,
                         extents = npcPrefab.BoundsExtents,
                     });
                     ecb.SetComponent(newEntity, LocalTransform.FromPositionRotation(waypoints[0].Value, rotation));
+                    ecb.AddBuffer<NPCVehicleBoxCasts>(newEntity);
 
                     spawner.ValueRW.currentVehicleCount += 1;
                 }
@@ -99,11 +103,11 @@ namespace AWSIM.TrafficSimulationECS
             NativeArray<Unity.Entities.Entity> entities = state.EntityManager.GetAllEntities(Allocator.Temp);
             var isSpawnable = true;
 
-            foreach (Unity.Entities.Entity entity in entities)
+            for (var i = 0; i < entities.Length; i++)
             {
-                if(state.EntityManager.HasComponent<NPCVehicleComponent>(entity))
+                if(state.EntityManager.HasComponent<NPCVehicleComponent>(entities[i]))
                 {
-                    NPCVehicleComponent npc = state.EntityManager.GetComponentData<NPCVehicleComponent>(entity);
+                    NPCVehicleComponent npc = state.EntityManager.GetComponentData<NPCVehicleComponent>(entities[i]);
                     var distanceToCurrentWaypoint = GeometryUtility.Distance2D(spawnPoint, npc.position);
                     var isClose = distanceToCurrentWaypoint <= (2.0f*bounds.z);
                     // var isClose = distanceToCurrentWaypoint <= 0.1;

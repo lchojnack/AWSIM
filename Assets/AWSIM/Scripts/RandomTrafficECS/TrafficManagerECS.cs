@@ -92,27 +92,18 @@ namespace AWSIM.TrafficSimulationECS
             foreach (var npcEntity in npcEntities)
             {
                 var npc = manager.GetComponentData<NPCVehicleComponent>(npcEntity);
+                var boxCasts = manager.GetBuffer<NPCVehicleBoxCasts>(npcEntity);
                 Gizmos.color = npc.isStoppedByFrontVehicle ? Color.red : Color.cyan;
 
-                    // var boxcastCount = Mathf.Min(MaxBoxcastCount, nativeStates[stateIndex].WaypointCount);
-                    // for (var commandIndex = stateIndex * MaxBoxcastCount;
-                    //         commandIndex < stateIndex * MaxBoxcastCount + boxcastCount;
-                    //         commandIndex++)
-                    // {
-                    //     var hitInfo = obstacleHitInfoArray[commandIndex];
-                    //     var hasHit = hitInfo.collider != null;
-
+                foreach (var boxCast in boxCasts)
+                {               
                     // var command = npc.boxcastCommand;
-                    var startPoint = npc.boxcastCommandStartPoint;
-                    var direction = npc.boxcastCommandDirection;
-                    var distance = npc.boxcastCommandDistance;
-                    // Debug.Log($"startPoint {startPoint}");
-                    // Debug.Log($"direction {direction}");
-                    // Debug.Log($"distance {distance}");
-                    // var distance = hasHit
-                    //     ? hitInfo.distance
-                    //     : command.distance;
-                    var extents = npc.boxcastCommandExtents;
+                    var startPoint = boxCast.startPoint;
+                    if(math.all(startPoint == float3.zero))
+                        return;
+                    var direction = boxCast.direction;
+                    var distance = boxCast.distance;
+                    var extents = boxCast.extents;
                     var destination = startPoint + direction;
                     // Debug.Log($"destination {destination}");
                     var rotation = Quaternion.LookRotation(direction);
@@ -122,14 +113,45 @@ namespace AWSIM.TrafficSimulationECS
                     Gizmos.DrawWireCube(Vector3.zero, cubeSize);
                     Gizmos.matrix = Matrix4x4.identity;
 
-                    if(npc.isStoppedByFrontVehicle)
+                    if(boxCast.raycastHit)
                     {
                         Gizmos.color = Color.red;
-                        Gizmos.DrawSphere(npc.raycastHitPoint, 0.4f);
+                        Gizmos.DrawSphere(boxCast.raycastHitPoint, 0.4f);
                     }
-                    //     if (hasHit)
-                    //         break;
-                    // }
+
+                    if (npc.yieldPhase == NPCVehicleYieldPhase.NONE ||
+                        npc.yieldPhase == NPCVehicleYieldPhase.ENTERING_INTERSECTION ||
+                        npc.yieldPhase == NPCVehicleYieldPhase.AT_INTERSECTION)
+                    {
+                        continue;
+                    }
+
+                    switch (npc.yieldPhase)
+                    {
+                        case NPCVehicleYieldPhase.INTERSECTION_BLOCKED:
+                            Gizmos.color = Color.blue;
+                            break;
+                        case NPCVehicleYieldPhase.LEFT_HAND_RULE_ENTERING_INTERSECTION:
+                            Gizmos.color = Color.gray;
+                            break;
+                        case NPCVehicleYieldPhase.LEFT_HAND_RULE_AT_INTERSECTION:
+                            Gizmos.color = Color.black;
+                            break;
+                        case NPCVehicleYieldPhase.LANES_RULES_ENTERING_INTERSECTION:
+                            Gizmos.color = Color.yellow;
+                            break;
+                        case NPCVehicleYieldPhase.LANES_RULES_AT_INTERSECTION:
+                            Gizmos.color = Color.red;
+                            break;
+                        case NPCVehicleYieldPhase.FORCING_PRIORITY:
+                            Gizmos.color = Color.magenta;
+                            break;
+                    }
+                    Gizmos.DrawCube(npc.yieldPoint, new Vector3(1.0f, 0.2f, 1.0f));
+                    Gizmos.DrawSphere(npc.position, 0.5f);
+                    if (math.all(npc.dominatingVehiclePosition != float3.zero))
+                        Gizmos.DrawLine(npc.position, npc.dominatingVehiclePosition);
+                }
             }
        }
 
@@ -316,6 +338,7 @@ namespace AWSIM.TrafficSimulationECS
             if(trafficLane != null)
             {
                 return new TrafficLaneComponent {
+                    name = trafficLane.name,
                     turnDirection = toTurnDirectionType(trafficLane.TurnDirection),
                     speedLimit = trafficLane.SpeedLimit,
                     intersectionLane = trafficLane.intersectionLane
