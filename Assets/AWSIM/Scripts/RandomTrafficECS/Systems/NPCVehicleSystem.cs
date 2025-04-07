@@ -656,35 +656,17 @@ namespace AWSIM.TrafficSimulationECS
         [BurstCompile]
         private float GetDistanceToIntersection(RefRW<NPCVehicleComponent> npc)
         {
-            if (!_trafficLaneLookup.HasComponent(npc.ValueRO.currentTrafficLane))
+            var firstLaneWithIntersection = FirstLaneWithIntersection(npc);
+            if (firstLaneWithIntersection == Unity.Entities.Entity.Null)
                 return float.MaxValue;
 
-            var laneComponent = _trafficLaneLookup[npc.ValueRO.currentTrafficLane];
+            var trafficLane = _trafficLaneLookup[firstLaneWithIntersection];
+            var waypoints = _waypointsLookup[firstLaneWithIntersection];
+            var stopLineCenterPoint = _stopLineLookup.HasComponent(firstLaneWithIntersection) 
+                ? _stopLineLookup[firstLaneWithIntersection].centerPoint 
+                : waypoints[0].Value;
 
-            // Use the _waypointsLookup to get associated waypoints
-            if (!_waypointsLookup.HasBuffer(npc.ValueRO.currentTrafficLane))
-                return float.MaxValue;
-
-
-            // Check if stopLine is valid and accessible in ECS
-            if (laneComponent.stopLine != null && _stopLineLookup.HasComponent(laneComponent.stopLine))
-            {
-                // Calculate the distance to the stop line's center point
-                float3 stopLinePosition = _stopLineLookup[laneComponent.stopLine].centerPoint; // Access centerPoint
-                return SignedDistanceToPointOnLane(npc, stopLinePosition);
-            }
-            
-            // // Fallback to check waypoints if there's no stop line
-            if (_waypointsLookup.HasBuffer(npc.ValueRO.currentTrafficLane))
-            {
-                var waypoints = _waypointsLookup[npc.ValueRO.currentTrafficLane];
-                if (waypoints.Length > 0)
-                {
-                    return SignedDistanceToPointOnLane(npc, waypoints[0].Value); // Use the first waypoint
-                }
-            }
-
-            return float.MaxValue; // Return max distance if no stop line or waypoints exist
+            return SignedDistanceToPointOnLane(npc, stopLineCenterPoint);
         }
 
         [BurstCompile]
